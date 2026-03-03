@@ -59,6 +59,62 @@ function stripUnknownKeys(config: Record<string, unknown>): string[] {
   return allRemoved;
 }
 
+const DEFAULT_ACCOUNT_ID = "default";
+
+/**
+ * Ensure channels with non-default accounts have a wildcard binding.
+ *
+ * When EasyClaw creates a channel account with a generated accountId
+ * (e.g. "acct_xxx") instead of "default", OpenClaw's doctor warns about
+ * missing bindings and may rewrite the config file. Adding a wildcard
+ * binding ({ match: { channel, accountId: "*" } }) silences the warning
+ * and is forward-compatible with future multi-agent routing (specific
+ * per-account bindings take priority over the wildcard).
+ */
+function ensureChannelBindings(config: Record<string, unknown>): void {
+  const channels = config.channels;
+  if (!channels || typeof channels !== "object") return;
+
+  const channelEntries = channels as Record<string, unknown>;
+  const bindings = (Array.isArray(config.bindings) ? config.bindings : []) as Array<Record<string, unknown>>;
+
+  for (const [channelId, rawChannel] of Object.entries(channelEntries)) {
+    if (!rawChannel || typeof rawChannel !== "object") continue;
+    const channel = rawChannel as Record<string, unknown>;
+    const accounts = channel.accounts;
+    if (!accounts || typeof accounts !== "object") continue;
+
+    const accountIds = Object.keys(accounts as Record<string, unknown>);
+    if (accountIds.length === 0) continue;
+
+    // If "default" account exists, OpenClaw's default routing works fine
+    const hasDefault = accountIds.some(id => id.trim().toLowerCase() === DEFAULT_ACCOUNT_ID);
+    if (hasDefault) continue;
+
+    // Check if a binding already covers this channel (wildcard or specific per-account)
+    const hasCovering = bindings.some(b => {
+      const match = b.match as Record<string, unknown> | undefined;
+      if (!match) return false;
+      const matchChannel = (typeof match.channel === "string" ? match.channel.trim().toLowerCase() : "");
+      if (matchChannel !== channelId.toLowerCase()) return false;
+      const matchAccountId = typeof match.accountId === "string" ? match.accountId.trim() : "";
+      return matchAccountId === "*" || accountIds.some(id => id.toLowerCase() === matchAccountId.toLowerCase());
+    });
+    if (hasCovering) continue;
+
+    // Add a wildcard binding for this channel → default agent ("main")
+    bindings.push({
+      agentId: "main",
+      match: { channel: channelId, accountId: "*" },
+    });
+    log.info(`Added wildcard binding for channel "${channelId}" (non-default accounts: ${accountIds.join(", ")})`);
+  }
+
+  if (bindings.length > 0) {
+    config.bindings = bindings;
+  }
+}
+
 /**
  * Find the monorepo root by looking for pnpm-workspace.yaml
  */
@@ -783,6 +839,11 @@ export function writeGatewayConfig(options: WriteGatewayConfigOptions): string {
       };
     }
   }
+
+  // Ensure wildcard bindings exist for channels with non-default accounts.
+  // Without these, OpenClaw's doctor warns about missing default account
+  // bindings and may rewrite the config file during startup.
+  ensureChannelBindings(config);
 
   // Strip keys unrecognised by the OpenClaw schema (at any nesting level)
   // so that stale entries injected by third-party plugins, manual edits, or

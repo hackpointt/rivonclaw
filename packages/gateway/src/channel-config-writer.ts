@@ -65,6 +65,12 @@ export function writeChannelAccount(options: WriteChannelAccountOptions): void {
   // Auto-enable the channel plugin in plugins.entries so the gateway loads it
   enableChannelPlugin(existingConfig, channelId);
 
+  // Ensure a wildcard binding exists for non-default accounts so OpenClaw's
+  // doctor doesn't warn about missing bindings and rewrite the config file.
+  if (accountId.trim().toLowerCase() !== "default") {
+    ensureWildcardBinding(existingConfig, channelId);
+  }
+
   // Write back to file
   writeFileSync(configPath, JSON.stringify(existingConfig, null, 2), "utf-8");
   log.info(`Wrote channel account: ${channelId}/${accountId}`);
@@ -177,6 +183,33 @@ function disableChannelPlugin(config: Record<string, unknown>, channelId: string
   if (typeof entries[channelId] === "object" && entries[channelId] !== null) {
     (entries[channelId] as Record<string, unknown>).enabled = false;
     log.info(`Disabled channel plugin: ${channelId}`);
+  }
+}
+
+/**
+ * Ensure a wildcard binding exists for a channel so OpenClaw routes messages
+ * from non-default accounts to the default agent without doctor warnings.
+ */
+function ensureWildcardBinding(config: Record<string, unknown>, channelId: string): void {
+  const bindings = (Array.isArray(config.bindings) ? config.bindings : []) as Array<Record<string, unknown>>;
+  const channelLower = channelId.toLowerCase();
+
+  const hasCovering = bindings.some(b => {
+    const match = b.match as Record<string, unknown> | undefined;
+    if (!match) return false;
+    const matchChannel = typeof match.channel === "string" ? match.channel.trim().toLowerCase() : "";
+    if (matchChannel !== channelLower) return false;
+    const matchAccountId = typeof match.accountId === "string" ? match.accountId.trim() : "";
+    return matchAccountId === "*";
+  });
+
+  if (!hasCovering) {
+    bindings.push({
+      agentId: "main",
+      match: { channel: channelId, accountId: "*" },
+    });
+    config.bindings = bindings;
+    log.info(`Added wildcard binding for channel "${channelId}"`);
   }
 }
 
