@@ -136,6 +136,17 @@ process.stdout.write = function (chunk, ...args) {
   const str = typeof chunk === "string" ? chunk : chunk.toString();
   if (str.includes("listening on")) {
     logPhase("gateway listening (READY)");
+    // Flush V8 compile cache to disk immediately. Critical on Windows where
+    // the process is force-killed via `taskkill /T /F` — without an explicit
+    // flush, V8 never writes the cache and every startup pays full parse cost.
+    try {
+      if (typeof Module.flushCompileCache === "function") {
+        Module.flushCompileCache();
+        logPhase("compile cache flushed to disk");
+      }
+    } catch {
+      // Non-critical — cache will be written at next graceful exit (if any)
+    }
   }
   return origStdoutWrite.call(this, chunk, ...args);
 };

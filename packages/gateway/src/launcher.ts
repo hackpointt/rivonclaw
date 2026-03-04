@@ -270,7 +270,7 @@ Module._load=function(r,p,m){const s=performance.now();const res=origLoad.call(t
 process.stderr.write("[startup-timer] +0ms preload executing\\n");
 const cc=process.env.NODE_COMPILE_CACHE;if(cc)process.stderr.write("[startup-timer] compile-cache: "+cc+"\\n");else process.stderr.write("[startup-timer] compile cache: DISABLED\\n");
 setImmediate(()=>process.stderr.write("[startup-timer] +"+(performance.now()-t0|0)+"ms event loop started\\n"));
-const ow=process.stdout.write;process.stdout.write=function(c,...a){if(String(c).includes("listening on"))process.stderr.write("[startup-timer] +"+(performance.now()-t0|0)+"ms gateway listening\\n");return ow.call(this,c,...a)};
+const ow=process.stdout.write;process.stdout.write=function(c,...a){if(String(c).includes("listening on")){process.stderr.write("[startup-timer] +"+(performance.now()-t0|0)+"ms gateway listening\\n");try{if(typeof Module.flushCompileCache==="function"){Module.flushCompileCache();process.stderr.write("[startup-timer] compile cache flushed\\n")}}catch{}}return ow.call(this,c,...a)};
 `,
           );
         }
