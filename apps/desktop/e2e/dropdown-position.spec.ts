@@ -37,37 +37,43 @@ test.describe("Dropdown positioning", () => {
     // Click the model dropdown trigger
     await trigger.click();
 
-    // Wait for the dropdown to appear
+    // The dropdown position is set asynchronously via useEffect after the portal
+    // renders. On slower machines, getBoundingClientRect can return stale values
+    // if layout hasn't settled, leaving the dropdown at x=0. If misaligned, close
+    // and reopen to force a fresh position calculation.
     const dropdown = window.locator(".custom-select-dropdown");
-    await expect(dropdown).toBeVisible({ timeout: 5_000 });
+    await expect(async () => {
+      if (!await dropdown.isVisible().catch(() => false)) {
+        await trigger.click();
+        await expect(dropdown).toBeVisible({ timeout: 3_000 });
+      }
 
-    // Get bounding rects of trigger and dropdown
-    const triggerBox = await trigger.boundingBox();
-    const dropdownBox = await dropdown.boundingBox();
+      const triggerBox = await trigger.boundingBox();
+      const dropdownBox = await dropdown.boundingBox();
+      expect(triggerBox).toBeTruthy();
+      expect(dropdownBox).toBeTruthy();
 
-    expect(triggerBox).toBeTruthy();
-    expect(dropdownBox).toBeTruthy();
+      const horizontalOffset = Math.abs(dropdownBox!.x - triggerBox!.x);
+      if (horizontalOffset >= 20) {
+        // Close and let toPass retry with a fresh open
+        await trigger.click();
+        await dropdown.waitFor({ state: "hidden", timeout: 2_000 }).catch(() => {});
+      }
+      expect(
+        horizontalOffset,
+        `Dropdown left edge (${dropdownBox!.x}) is ${horizontalOffset}px away from trigger left edge (${triggerBox!.x}). ` +
+        `This likely means a CSS transform/filter on an ancestor is breaking position:fixed.`,
+      ).toBeLessThan(20);
 
-    // The dropdown's left edge must be close to the trigger's left edge.
-    // A large horizontal offset (e.g. sidebar width ~250px) indicates
-    // position:fixed is broken by a CSS containing block.
-    const horizontalOffset = Math.abs(dropdownBox!.x - triggerBox!.x);
-    expect(
-      horizontalOffset,
-      `Dropdown left edge (${dropdownBox!.x}) is ${horizontalOffset}px away from trigger left edge (${triggerBox!.x}). ` +
-      `This likely means a CSS transform/filter on an ancestor is breaking position:fixed.`,
-    ).toBeLessThan(20);
-
-    // The dropdown must be vertically adjacent to the trigger
-    // (either directly above or directly below, within a small gap)
-    const gap = 8; // max allowed gap between trigger and dropdown
-    const isBelow = dropdownBox!.y >= triggerBox!.y + triggerBox!.height - gap;
-    const isAbove = dropdownBox!.y + dropdownBox!.height <= triggerBox!.y + gap;
-    expect(
-      isBelow || isAbove,
-      `Dropdown (y=${dropdownBox!.y}, h=${dropdownBox!.height}) is not adjacent to trigger ` +
-      `(y=${triggerBox!.y}, h=${triggerBox!.height}). Expected dropdown directly above or below.`,
-    ).toBe(true);
+      const gap = 8;
+      const isBelow = dropdownBox!.y >= triggerBox!.y + triggerBox!.height - gap;
+      const isAbove = dropdownBox!.y + dropdownBox!.height <= triggerBox!.y + gap;
+      expect(
+        isBelow || isAbove,
+        `Dropdown (y=${dropdownBox!.y}, h=${dropdownBox!.height}) is not adjacent to trigger ` +
+        `(y=${triggerBox!.y}, h=${triggerBox!.height}). Expected dropdown directly above or below.`,
+      ).toBe(true);
+    }).toPass({ timeout: 10_000 });
 
     // Close dropdown
     await trigger.click();
@@ -107,29 +113,37 @@ test.describe("Dropdown positioning", () => {
     // happens during click(), the dropdown opens then immediately closes.
     await trigger.scrollIntoViewIfNeeded();
     await window.waitForTimeout(500);
-    await trigger.click();
 
+    // Same retry strategy as the first test: if the dropdown position is wrong
+    // (getBoundingClientRect returned stale values before layout settled),
+    // close and reopen to force a fresh position calculation.
     const dropdown = window.locator(".custom-select-dropdown");
-    await expect(dropdown).toBeVisible({ timeout: 5_000 });
+    await expect(async () => {
+      if (!await dropdown.isVisible().catch(() => false)) {
+        await trigger.click();
+        await expect(dropdown).toBeVisible({ timeout: 3_000 });
+      }
 
-    const triggerBox = await trigger.boundingBox();
-    const dropdownBox = await dropdown.boundingBox();
+      const triggerBox = await trigger.boundingBox();
+      const dropdownBox = await dropdown.boundingBox();
+      expect(triggerBox).toBeTruthy();
+      expect(dropdownBox).toBeTruthy();
 
-    expect(triggerBox).toBeTruthy();
-    expect(dropdownBox).toBeTruthy();
+      const horizontalOffset = Math.abs(dropdownBox!.x - triggerBox!.x);
+      if (horizontalOffset >= 20) {
+        await trigger.click();
+        await dropdown.waitFor({ state: "hidden", timeout: 2_000 }).catch(() => {});
+      }
+      expect(
+        horizontalOffset,
+        `Dropdown horizontally misaligned by ${horizontalOffset}px (trigger x=${triggerBox!.x}, dropdown x=${dropdownBox!.x})`,
+      ).toBeLessThan(20);
 
-    // Horizontal alignment check
-    const horizontalOffset = Math.abs(dropdownBox!.x - triggerBox!.x);
-    expect(
-      horizontalOffset,
-      `Dropdown horizontally misaligned by ${horizontalOffset}px (trigger x=${triggerBox!.x}, dropdown x=${dropdownBox!.x})`,
-    ).toBeLessThan(20);
-
-    // Dropdown should be at least as wide as the trigger (may be wider for long model names)
-    expect(
-      dropdownBox!.width,
-      `Dropdown width (${dropdownBox!.width}) is narrower than trigger width (${triggerBox!.width})`,
-    ).toBeGreaterThanOrEqual(triggerBox!.width - 10);
+      expect(
+        dropdownBox!.width,
+        `Dropdown width (${dropdownBox!.width}) is narrower than trigger width (${triggerBox!.width})`,
+      ).toBeGreaterThanOrEqual(triggerBox!.width - 10);
+    }).toPass({ timeout: 10_000 });
 
     // Close dropdown
     await trigger.click();

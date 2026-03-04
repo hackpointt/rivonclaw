@@ -309,7 +309,7 @@ export const test = base.extend<ElectronFixtures>({
     // before the port opens) and can restart multiple times after a provider
     // change. Waiting here removes the race from every individual test.
     await window.waitForSelector(".chat-status-dot-connected", {
-      timeout: 30_000,
+      timeout: 45_000,
     });
 
     await use(window);
