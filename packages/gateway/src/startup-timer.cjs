@@ -55,25 +55,19 @@ const origLoad = Module._load;
 // Extensions use require("openclaw/plugin-sdk") as an external dependency.
 // Without this hook, Node.js native require fails (no node_modules/openclaw/),
 // causing jiti to fall back to its babel-transform pipeline. jiti's nested
-// requires are NOT cached to disk, so the 17 MB plugin-sdk gets babel-
-// transformed on EVERY startup (~12 s macOS, ~22 s Windows).
+// requires are NOT cached to disk, so the plugin-sdk gets babel-transformed
+// on EVERY startup (~12 s macOS, ~22 s Windows).
 //
 // This hook captures the absolute path of plugin-sdk when entry.js first
 // loads it via require("./plugin-sdk/index.js"), then redirects all future
-// require("openclaw/plugin-sdk") calls to that path. Since the module is
-// already in Node's module cache, the redirect is free. jiti's native
-// require succeeds → no fallback → no babel → instant extension loading.
+// require("openclaw/plugin-sdk") calls to that path. jiti's native require
+// succeeds → no fallback → no babel → instant extension loading.
 //
-// ── Optimization: Defer plugin-sdk evaluation ──
-// entry.js has a "preload block" (Phase 2.6) that eagerly require()s the
-// 15.2 MB plugin-sdk at startup just to warm require.cache. This costs ~2s
-// per process on Windows. Since vendor extensions already have plugin-sdk
-// inlined (Phase 0.5b), the monolithic plugin-sdk is only needed by third-
-// party plugins. We intercept the preload's require(), set the path alias
-// without evaluating the 15.2 MB file, and let real loading happen on-demand.
+// With lazy-chunked plugin-sdk (Phase 0.5a), the index.js is a thin ~20KB
+// wrapper with lazy getters. Loading it costs <1ms. Only when an extension
+// accesses a specific export does the corresponding chunk load.
 let pluginSdkResolvedPath = null;
 let pluginSdkDir = null;
-let pluginSdkPreloadSkipped = false;
 
 const origResolveFilename = Module._resolveFilename;
 Module._resolveFilename = function resolveWithPluginSdk(
@@ -105,12 +99,8 @@ Module._load = function timedLoad(request, parent, isMain) {
   requireCount++;
   const start = performance.now();
 
-  // Defer plugin-sdk preload: the first require("...plugin-sdk/index.js")
-  // comes from entry.js's preload block which discards the return value.
-  // We set the path alias but skip the expensive 15.2 MB evaluation (~2s).
-  // Real loading happens on-demand when a third-party plugin actually needs it.
-  if (!pluginSdkPreloadSkipped && /plugin-sdk[/\\]index\.js$/.test(request)) {
-    pluginSdkPreloadSkipped = true;
+  // Capture plugin-sdk path on first load for the _resolveFilename hook above.
+  if (!pluginSdkResolvedPath && /plugin-sdk[/\\]index\.js$/.test(request)) {
     try {
       pluginSdkResolvedPath = origResolveFilename.call(
         Module,
@@ -119,14 +109,10 @@ Module._load = function timedLoad(request, parent, isMain) {
         isMain,
       );
       pluginSdkDir = path.dirname(pluginSdkResolvedPath);
-      logPhase(`plugin-sdk deferred (alias set): ${pluginSdkResolvedPath}`);
+      logPhase(`plugin-sdk alias set: ${pluginSdkResolvedPath}`);
     } catch {
       // Non-critical — extensions will still load via jiti fallback
     }
-    // Return empty module — preload block doesn't use the return value.
-    // We don't call origLoad, so nothing is cached in require.cache.
-    // The next real require() will load the full module on-demand.
-    return {};
   }
 
   const result = origLoad.call(this, request, parent, isMain);

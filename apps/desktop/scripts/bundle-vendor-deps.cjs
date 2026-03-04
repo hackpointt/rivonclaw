@@ -328,16 +328,61 @@ async function extractVendorModelCatalog() {
   );
 }
 
-// ─── Phase 0.5a: Bundle plugin-sdk into a single file ───
-// dist/plugin-sdk/ contains index.js + ~90 chunk files.  Vendor extensions
-// now inline plugin-sdk at build time (Phase 0.5b), but user-installed /
-// third-party plugins still import plugin-sdk at runtime via jiti's alias
-// ("openclaw/plugin-sdk" → dist/plugin-sdk/index.js).
-// Bundle index.js into a self-contained file so we can delete the chunks.
-// account-id.js is already self-contained (1.1KB, no chunk imports).
+// ─── Phase 0.5a: Per-chunk CJS conversion for plugin-sdk ───
+// dist/plugin-sdk/ contains index.js + ~87 ESM chunk files from tsdown/rolldown.
+//
+// Instead of merging everything into a single 15+ MB CJS file (which takes ~2s
+// to evaluate on Windows), we convert each chunk to CJS individually using
+// esbuild. Inter-chunk require() calls are preserved so Node's module cache
+// ensures each chunk evaluates only once. npm deps (jszip, tar, etc.) are
+// inlined per-chunk so they don't need to stay in node_modules.
+//
+// A thin lazy index.js maps each export to its source chunk via
+// Object.defineProperty getters. require("plugin-sdk") returns instantly;
+// only the chunks actually accessed at runtime get loaded.
+
+/**
+ * Parse the final `export { ... };` statement from ESM index.js.
+ * Returns an array of { publicName, raw } objects.
+ */
+function parsePluginSdkExports(indexContent) {
+  const match = indexContent.match(/export\s*\{([^}]+)\}\s*;/);
+  if (!match) return [];
+  return match[1]
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const asMatch = raw.match(/^(\S+)\s+as\s+(\S+)$/);
+      return { publicName: asMatch ? asMatch[2] : raw, raw };
+    });
+}
+
+/**
+ * Parse named import statements from ESM index.js to build an export→chunk map.
+ * Returns a Map<publicName, { chunk, internalName }>.
+ * Exports NOT in this map are defined inline in index.js.
+ */
+function parsePluginSdkImportMap(indexContent) {
+  const map = new Map();
+  const re = /import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g;
+  let m;
+  while ((m = re.exec(indexContent)) !== null) {
+    const chunk = m[2]; // e.g. "./session-key-ABC.js"
+    if (!chunk.startsWith("./")) continue; // skip npm/node imports
+    const names = m[1].split(",").map((s) => s.trim()).filter(Boolean);
+    for (const n of names) {
+      const asMatch = n.match(/^(\S+)\s+as\s+(\S+)$/);
+      const internalName = asMatch ? asMatch[1] : n;
+      const publicName = asMatch ? asMatch[2] : n;
+      map.set(publicName, { chunk: chunk.slice(2), internalName }); // strip "./"
+    }
+  }
+  return map;
+}
 
 function bundlePluginSdk() {
-  console.log("[bundle-vendor-deps] Phase 0.5a: Bundling plugin-sdk...");
+  console.log("[bundle-vendor-deps] Phase 0.5a: Per-chunk CJS bundling...");
 
   const pluginSdkDir = path.join(distDir, "plugin-sdk");
   const pluginSdkIndex = path.join(pluginSdkDir, "index.js");
@@ -348,13 +393,37 @@ function bundlePluginSdk() {
   }
 
   const esbuild = loadEsbuild();
-  const tmpOut = path.join(pluginSdkDir, "index.bundled.mjs");
+  const indexContent = fs.readFileSync(pluginSdkIndex, "utf-8");
 
-  esbuild.buildSync({
-    entryPoints: [pluginSdkIndex],
-    outfile: tmpOut,
+  // ── Step 1: Parse exports and import→chunk mapping ──
+  const allExports = parsePluginSdkExports(indexContent);
+  if (allExports.length === 0) {
+    console.warn("[bundle-vendor-deps] WARNING: No exports found in plugin-sdk index.js");
+    return;
+  }
+  const importMap = parsePluginSdkImportMap(indexContent);
+  const chunkExportCount = allExports.filter((e) => importMap.has(e.publicName)).length;
+  const inlineExportCount = allExports.length - chunkExportCount;
+  console.log(
+    `[bundle-vendor-deps] plugin-sdk: ${allExports.length} exports ` +
+      `(${chunkExportCount} from chunks, ${inlineExportCount} inline)`,
+  );
+
+  // ── Step 2: Bundle each ESM chunk to CJS ──
+  // Inter-chunk imports stay as require() calls (external), npm deps are
+  // inlined so they don't need to be in node_modules at runtime.
+  // IMPORTANT: ./index.js is excluded from chunk externals. No ESM chunk
+  // imports from ./index.js, but esbuild falsely externalizes npm deps'
+  // internal ./index.js imports (e.g. qrcode-terminal/vendor/QRCode/index.js)
+  // if it's in the externals list, creating spurious circular dependencies.
+  const inlineName = "_inline.js";
+  const allJsFiles = fs.readdirSync(pluginSdkDir).filter((f) => f.endsWith(".js"));
+  const chunkExternals = allJsFiles
+    .filter((f) => f !== "index.js") // exclude index.js — see note above
+    .map((f) => "./" + f);
+
+  const esbuildCommon = {
     bundle: true,
-    // CJS so jiti can require() without babel ESM→CJS transform.
     format: "cjs",
     platform: "node",
     target: "node22",
@@ -362,63 +431,179 @@ function bundlePluginSdk() {
     banner: {
       js: 'var __import_meta_url = require("url").pathToFileURL(__filename).href;',
     },
-    external: EXTERNAL_PACKAGES,
+    external: [...chunkExternals, ...EXTERNAL_PACKAGES],
     minify: true,
     logLevel: "warning",
-  });
+  };
 
-  const bundleSize = fs.statSync(tmpOut).size;
-
-  // Replace index.js with the bundle
-  fs.unlinkSync(pluginSdkIndex);
-  fs.renameSync(tmpOut, pluginSdkIndex);
-
-  // Also bundle account-id.js as CJS (it's originally ESM).
-  // We need both files to be CJS so the {"type":"commonjs"} package.json
-  // (which enables the require() preload) doesn't break ESM imports.
-  const accountIdPath = path.join(pluginSdkDir, "account-id.js");
-  if (fs.existsSync(accountIdPath)) {
-    const accountIdTmp = path.join(pluginSdkDir, "account-id.bundled.cjs");
+  // Bundle account-id.js FIRST (before we start replacing ESM files)
+  const accountIdSrc = path.join(pluginSdkDir, "account-id.js");
+  const accountIdTmp = path.join(pluginSdkDir, "_account-id-cjs.js");
+  if (fs.existsSync(accountIdSrc)) {
     esbuild.buildSync({
-      entryPoints: [accountIdPath],
+      ...esbuildCommon,
+      entryPoints: [accountIdSrc],
       outfile: accountIdTmp,
-      bundle: true,
-      format: "cjs",
-      platform: "node",
-      target: "node22",
-      external: EXTERNAL_PACKAGES,
-      minify: true,
-      logLevel: "warning",
     });
-    fs.unlinkSync(accountIdPath);
-    fs.renameSync(accountIdTmp, accountIdPath);
   }
 
-  // Delete chunk files and subdirs (keep only index.js and account-id.js)
-  const keepFiles = new Set(["index.js", "account-id.js", "package.json"]);
-  let deleted = 0;
-  for (const entry of fs.readdirSync(pluginSdkDir, { withFileTypes: true })) {
-    if (keepFiles.has(entry.name)) continue;
-    const fullPath = path.join(pluginSdkDir, entry.name);
-    if (entry.isDirectory()) {
-      fs.rmSync(fullPath, { recursive: true, force: true });
-      deleted += countFiles(fullPath) || 1;
-    } else {
-      fs.unlinkSync(fullPath);
-      deleted++;
+  const tmpDir = path.join(pluginSdkDir, "_cjs_tmp");
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  let totalChunkSize = 0;
+  let convertedCount = 0;
+
+  // For index.js specifically, add ./index.js to externals to allow
+  // self-referencing chunks to be kept as external requires.
+  const indexExternals = [...chunkExternals, "./index.js"];
+
+  for (const file of allJsFiles) {
+    if (file === "account-id.js") continue; // handled separately above
+    const srcPath = path.join(pluginSdkDir, file);
+    const outPath = path.join(tmpDir, file);
+
+    esbuild.buildSync({
+      ...esbuildCommon,
+      // index.js build needs ./index.js external (for self-imports from chunks)
+      // but other chunks must NOT have ./index.js external (false positive)
+      external: file === "index.js"
+        ? [...indexExternals, ...EXTERNAL_PACKAGES]
+        : [...chunkExternals, ...EXTERNAL_PACKAGES],
+      entryPoints: [srcPath],
+      outfile: outPath,
+    });
+
+    totalChunkSize += fs.statSync(outPath).size;
+    convertedCount++;
+  }
+
+  // ── Step 3: Replace ESM files with CJS versions ──
+  for (const file of allJsFiles) {
+    if (file === "account-id.js") continue;
+    fs.unlinkSync(path.join(pluginSdkDir, file));
+    fs.renameSync(path.join(tmpDir, file), path.join(pluginSdkDir, file));
+  }
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+
+  // Replace account-id.js
+  if (fs.existsSync(accountIdTmp)) {
+    fs.unlinkSync(accountIdSrc);
+    fs.renameSync(accountIdTmp, accountIdSrc);
+    totalChunkSize += fs.statSync(accountIdSrc).size;
+    convertedCount++;
+  }
+
+  // ── Step 4: Rename CJS index.js → _inline.js + make chunk requires lazy ──
+  const inlinePath = path.join(pluginSdkDir, inlineName);
+  fs.renameSync(path.join(pluginSdkDir, "index.js"), inlinePath);
+
+  // Post-process _inline.js: replace chunk require() calls with lazy Proxy
+  // objects. Without this, loading _inline.js eagerly evaluates ALL 67+
+  // chunk files (~1.3s). With lazy proxies, chunks only load when their
+  // properties are first accessed.
+  {
+    let inlineCode = fs.readFileSync(inlinePath, "utf-8");
+    const chunkFileSet = new Set(
+      fs.readdirSync(pluginSdkDir)
+        .filter((f) => f.endsWith(".js") && f !== inlineName && f !== "index.js" && f !== "account-id.js"),
+    );
+    // Match require("./CHUNK.js") where CHUNK is a known chunk file
+    const lazyHelper =
+      'function __lr(p){var m;return new Proxy({},{get:function(_,k){return(m||(m=require(p)))[k]}})}\n';
+    let lazyCount = 0;
+    inlineCode = inlineCode.replace(
+      /require\("\.\/([^"]+\.js)"\)/g,
+      (match, file) => {
+        if (chunkFileSet.has(file)) {
+          lazyCount++;
+          return `__lr("./${file}")`;
+        }
+        return match; // not a chunk — keep as-is
+      },
+    );
+    if (lazyCount > 0) {
+      // Inject helper after the banner line
+      const bannerEnd = inlineCode.indexOf("\n") + 1;
+      inlineCode = inlineCode.slice(0, bannerEnd) + lazyHelper + inlineCode.slice(bannerEnd);
+      fs.writeFileSync(inlinePath, inlineCode, "utf-8");
+      console.log(`[bundle-vendor-deps] _inline.js: ${lazyCount} chunk requires → lazy proxies`);
     }
   }
 
-  // Write {"type": "commonjs"} package.json so require() works despite
-  // the vendor root package.json having "type": "module".
+  // ── Step 6: Generate thin lazy CJS index.js ──
+  const indexOutPath = path.join(pluginSdkDir, "index.js");
+  const lines = [
+    '"use strict";',
+    'var __import_meta_url = require("url").pathToFileURL(__filename).href;',
+    "",
+    "// Lazy per-chunk loader. Each chunk is require()'d on first access.",
+    "// Node's require cache ensures each chunk evaluates only once.",
+    'function __c(f) { var m; return function() { return m || (m = require("./" + f)); }; }',
+    "",
+  ];
+
+  // Group exports by source chunk
+  const chunkLoaders = new Map(); // chunkFile → loaderVarName
+  let loaderIdx = 0;
+
+  for (const exp of allExports) {
+    const mapping = importMap.get(exp.publicName);
+    if (mapping) {
+      // Chunk-based export
+      if (!chunkLoaders.has(mapping.chunk)) {
+        const varName = `__l${loaderIdx++}`;
+        chunkLoaders.set(mapping.chunk, varName);
+        lines.push(`var ${varName} = __c(${JSON.stringify(mapping.chunk)});`);
+      }
+      const loader = chunkLoaders.get(mapping.chunk);
+      lines.push(
+        `Object.defineProperty(exports, ${JSON.stringify(exp.publicName)}, ` +
+          `{ get: function() { return ${loader}()[${JSON.stringify(mapping.internalName)}]; }, enumerable: true });`,
+      );
+    } else {
+      // Inline export — load from _inline.js
+      if (!chunkLoaders.has(inlineName)) {
+        const varName = `__l${loaderIdx++}`;
+        chunkLoaders.set(inlineName, varName);
+        lines.push(`var ${varName} = __c(${JSON.stringify(inlineName)});`);
+      }
+      const loader = chunkLoaders.get(inlineName);
+      lines.push(
+        `Object.defineProperty(exports, ${JSON.stringify(exp.publicName)}, ` +
+          `{ get: function() { return ${loader}()[${JSON.stringify(exp.publicName)}]; }, enumerable: true });`,
+      );
+    }
+  }
+  lines.push("");
+
+  fs.writeFileSync(indexOutPath, lines.join("\n"), "utf-8");
+
+  // ── Step 7: Delete non-.js files (source maps, .d.ts, subdirs, etc.) ──
+  for (const entry of fs.readdirSync(pluginSdkDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      fs.rmSync(path.join(pluginSdkDir, entry.name), { recursive: true, force: true });
+      continue;
+    }
+    if (!entry.name.endsWith(".js") && entry.name !== "package.json") {
+      fs.unlinkSync(path.join(pluginSdkDir, entry.name));
+    }
+  }
+
+  // ── Step 8: Write package.json ──
   fs.writeFileSync(
     path.join(pluginSdkDir, "package.json"),
     '{"type":"commonjs"}\n',
     "utf-8",
   );
 
+  // Report
+  const indexSize = fs.statSync(indexOutPath).size;
+  const finalFiles = fs.readdirSync(pluginSdkDir).filter((f) => f.endsWith(".js"));
   console.log(
-    `[bundle-vendor-deps] plugin-sdk bundled: ${(bundleSize / 1024 / 1024).toFixed(1)}MB, deleted ${deleted} chunk files`,
+    `[bundle-vendor-deps] plugin-sdk per-chunk CJS: ` +
+      `${convertedCount} chunks converted, ${finalFiles.length} JS files, ` +
+      `${(totalChunkSize / 1024 / 1024).toFixed(1)}MB total, ` +
+      `index ${(indexSize / 1024).toFixed(0)}KB (${chunkLoaders.size} lazy loaders)`,
   );
 }
 
@@ -472,9 +657,16 @@ function prebundleExtensions() {
     "openclaw/plugin-sdk/account-id",
   ];
   const pluginSdkDir = path.join(distDir, "plugin-sdk");
+  // Resolve plugin-sdk entry: could be .js or .mjs depending on tsdown config
+  const sdkIndexPath = fs.existsSync(path.join(pluginSdkDir, "index.js"))
+    ? path.join(pluginSdkDir, "index.js")
+    : path.join(pluginSdkDir, "index.mjs");
+  const sdkAccountIdPath = fs.existsSync(path.join(pluginSdkDir, "account-id.js"))
+    ? path.join(pluginSdkDir, "account-id.js")
+    : path.join(pluginSdkDir, "account-id.mjs");
   const pluginSdkAlias = {
-    "openclaw/plugin-sdk": path.join(pluginSdkDir, "index.js"),
-    "openclaw/plugin-sdk/account-id": path.join(pluginSdkDir, "account-id.js"),
+    "openclaw/plugin-sdk": sdkIndexPath,
+    "openclaw/plugin-sdk/account-id": sdkAccountIdPath,
   };
   // Mark plugin-sdk chunks as side-effect-free for esbuild tree-shaking.
   const pluginSdkPkg = path.join(pluginSdkDir, "package.json");
@@ -873,55 +1065,18 @@ function patchIsMainModule() {
 
 // ─── Phase 2.6: Pre-load plugin-sdk to bypass jiti ───
 //
-// jiti takes ~13 seconds to process the 16.6 MB plugin-sdk bundle because it
-// runs babel ESM detection + transform on every file it loads. Native require()
-// loads the same file in ~650ms. By pre-loading the plugin-sdk into
-// require.cache before jiti tries to load it, jiti finds the cached module and
-// returns immediately, cutting ~12 seconds off every gateway restart.
+// DISABLED: With lazy-chunked plugin-sdk (Phase 0.5a), the index.js is a thin
+// ~20KB wrapper with lazy getters. Loading it costs <1ms, so pre-loading is
+// unnecessary. More importantly, the old preload code eagerly require()'d ALL
+// sub-files in the plugin-sdk dir, which would defeat lazy loading by forcing
+// V8 to evaluate every chunk at startup.
+//
+// The startup-timer.cjs _resolveFilename hook still handles the
+// "openclaw/plugin-sdk" → file path mapping, so jiti's native require()
+// succeeds without a preload.
 
 function patchPluginSdkPreload() {
-  console.log("[bundle-vendor-deps] Phase 2.6: Injecting plugin-sdk preload...");
-
-  const content = fs.readFileSync(ENTRY_FILE, "utf-8");
-
-  // The preload code computes the plugin-sdk path relative to entry.js
-  // and loads it via native require() before jiti runs. jiti checks
-  // require.cache (when moduleCache is enabled, which is the default) and
-  // returns the cached exports immediately, skipping its slow babel pipeline.
-  const preloadCode = [
-    "// ── Plugin-SDK preload (bypass jiti) ──",
-    'var __sdkDir=require("path").join(require("url").fileURLToPath(import.meta.url),"..","plugin-sdk");',
-    'var __sdkIndex=require("path").join(__sdkDir,"index.js");',
-    "try{",
-    "  require(__sdkIndex);",
-    // Also populate common sub-path imports that extensions use
-    '  var __fs=require("fs"),__path=require("path");',
-    "  var __subFiles=__fs.readdirSync(__sdkDir).filter(function(f){return f.endsWith('.js')&&f!=='index.js'});",
-    "  __subFiles.forEach(function(f){try{require(__path.join(__sdkDir,f))}catch(e){}});",
-    '}catch(e){process.stderr.write("[preload] plugin-sdk: "+e.message+"\\n")}',
-  ].join("\n");
-
-  // Insert after the createRequire line (so `require` is available)
-  const requireIdx = content.indexOf("const require");
-  if (requireIdx === -1) {
-    console.warn("[bundle-vendor-deps] WARNING: Could not find 'const require' — plugin-sdk preload NOT injected");
-    return;
-  }
-
-  const afterRequireLine = content.indexOf("\n", requireIdx);
-  if (afterRequireLine === -1) {
-    console.warn("[bundle-vendor-deps] WARNING: No newline after 'const require' — plugin-sdk preload NOT injected");
-    return;
-  }
-
-  const patched =
-    content.slice(0, afterRequireLine + 1) +
-    preloadCode +
-    "\n" +
-    content.slice(afterRequireLine + 1);
-
-  fs.writeFileSync(ENTRY_FILE, patched, "utf-8");
-  console.log("[bundle-vendor-deps] Plugin-sdk preload injected");
+  console.log("[bundle-vendor-deps] Phase 2.6: Skipped (lazy-chunked plugin-sdk)");
 }
 
 // ─── Phase 3: (no-op with code splitting) ───

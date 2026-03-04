@@ -255,8 +255,8 @@ export class GatewayLauncher extends EventEmitter<GatewayEvents> {
           writeFileSync(preloadPath, readFileSync(srcPreload));
         } else {
           // Fallback: write a minimal inline version with the plugin-sdk
-          // resolution fix. Without this, jiti babel-transforms the 17 MB
-          // plugin-sdk on every startup because native require can't find
+          // resolution fix. Without this, jiti babel-transforms the plugin-sdk
+          // on every startup because native require can't find
           // "openclaw/plugin-sdk" and jiti's nested-require cache misses.
           writeFileSync(
             preloadPath,
@@ -265,8 +265,8 @@ const t0=performance.now(),path=require("path"),Module=require("module");
 let sdkPath=null,sdkDir=null;
 const origRes=Module._resolveFilename;
 Module._resolveFilename=function(r,p,m,o){if(sdkPath){if(r==="openclaw/plugin-sdk")return sdkPath;if(r.startsWith("openclaw/plugin-sdk/"))return origRes.call(this,path.join(sdkDir,r.slice(20)),p,m,o)}return origRes.call(this,r,p,m,o)};
-const origLoad=Module._load;let skipped=false;
-Module._load=function(r,p,m){if(!skipped&&/plugin-sdk[/\\\\]index\\.js$/.test(r)){skipped=true;try{sdkPath=origRes.call(Module,r,p,m);sdkDir=require("path").dirname(sdkPath);process.stderr.write("[startup-timer] plugin-sdk deferred: "+sdkPath+"\\n")}catch{}return{}}const s=performance.now();const res=origLoad.call(this,r,p,m);const d=performance.now()-s;if(d>50)process.stderr.write("[startup-timer] +"+((performance.now()-t0)|0)+"ms require(\\""+r+"\\") took "+(d|0)+"ms\\n");return res};
+const origLoad=Module._load;
+Module._load=function(r,p,m){if(!sdkPath&&/plugin-sdk[/\\\\]index\\.js$/.test(r)){try{sdkPath=origRes.call(Module,r,p,m);sdkDir=require("path").dirname(sdkPath);process.stderr.write("[startup-timer] plugin-sdk alias: "+sdkPath+"\\n")}catch{}}const s=performance.now();const res=origLoad.call(this,r,p,m);const d=performance.now()-s;if(d>50)process.stderr.write("[startup-timer] +"+((performance.now()-t0)|0)+"ms require(\\""+r+"\\") took "+(d|0)+"ms\\n");return res};
 process.stderr.write("[startup-timer] +0ms preload executing\\n");
 const cc=process.env.NODE_COMPILE_CACHE;if(cc)process.stderr.write("[startup-timer] compile-cache: "+cc+"\\n");else process.stderr.write("[startup-timer] compile cache: DISABLED\\n");
 setImmediate(()=>process.stderr.write("[startup-timer] +"+(performance.now()-t0|0)+"ms event loop started\\n"));
