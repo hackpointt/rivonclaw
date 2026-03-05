@@ -87,6 +87,15 @@ export async function handleMobileChatRoutes(
 
         try {
             ctx.mobileManager.disconnectPairing();
+
+            // Stop the Gateway plugin sync engine
+            const rpcClient = ctx.getRpcClient?.();
+            if (rpcClient?.isConnected()) {
+                rpcClient.request("mobile_chat_stop_sync", {}).catch((err: any) => {
+                    console.error("Failed to stop mobile sync via RPC:", err);
+                });
+            }
+
             sendJson(res, 200, { success: true });
         } catch (err: any) {
             sendJson(res, 500, { error: err.message || "Failed to disconnect mobile pairing" });

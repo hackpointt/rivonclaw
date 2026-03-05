@@ -92,10 +92,6 @@ export function buildAccountsList(
   }
 
   for (const [channelId, accounts] of Object.entries(snapshot.channelAccounts)) {
-    // WeCom and Mobile are handled as virtual accounts above based on their specialized pairing statuses.
-    // We ignore their raw reporting from the Gateway engine to prevent duplicates or ghost sessions.
-    if (channelId === "wecom" || channelId === "mobile") continue;
-
     const knownChannel = KNOWN_CHANNELS.find(c => c.id === channelId);
     const channelLabel = knownChannel ? t(knownChannel.labelKey) : snapshot.channelLabels[channelId] || channelId;
 
