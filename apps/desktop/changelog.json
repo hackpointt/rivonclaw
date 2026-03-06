@@ -1,5 +1,31 @@
 [
   {
+    "version": "1.6.0",
+    "date": "2026-03-04",
+    "en": [
+      "Add mobile chat pairing — connect your phone via QR code",
+      "Multi-device pairing support with privacy-mode QR blur",
+      "Add collapse-long-messages toggle in chat settings",
+      "Add missing vision model support for Qwen 3.5 Plus, Kimi K2.5, Doubao Seed 1.6 Lite",
+      "Fix invisible window on Windows when gateway fails to start",
+      "Fix WebSocket keepalive and session mixing on reconnect",
+      "Improve chat auto-scroll behavior",
+      "Fix gateway orphan process prevention with owner toggle UI",
+      "Fix user-installed skills directory resolution on migration"
+    ],
+    "zh": [
+      "新增手机聊天配对 — 扫码连接手机",
+      "支持多设备同时配对，隐私模式二维码模糊",
+      "聊天设置新增「折叠长消息」开关",
+      "新增 Qwen 3.5 Plus、Kimi K2.5、豆包 Seed 1.6 Lite 的视觉模型支持",
+      "修复 Windows 上网关启动失败时窗口不可见的问题",
+      "修复 WebSocket 断线重连时会话串线的问题",
+      "优化聊天自动滚动体验",
+      "修复网关孤儿进程问题，新增主人开关控制",
+      "修复迁移时用户安装的技能目录解析错误"
+    ]
+  },
+  {
     "version": "1.5.16",
     "date": "2026-03-03",
     "en": [
