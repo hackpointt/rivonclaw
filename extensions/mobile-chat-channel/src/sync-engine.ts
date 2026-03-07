@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import fs from "node:fs/promises";
 import { RelayTransport } from './relay-transport';
@@ -33,6 +33,8 @@ export class MobileSyncEngine {
     public onUnpaired: (() => void) | null = null;
     /** Session keys this engine has dispatched to — used by plugin hooks to route tool events. */
     public activeSessionKeys: Set<string> = new Set();
+    /** Gateway broadcast function — set by the plugin to push events to connected clients. */
+    public gatewayBroadcast: ((event: string, payload: unknown) => void) | null = null;
 
     constructor(
         private readonly api: any, // GatewayPluginApi
@@ -205,39 +207,76 @@ export class MobileSyncEngine {
         });
     }
 
-    /** Reset the agent session: archive transcripts and clear engine state. */
+    /** Reset the agent session: update session store, archive transcripts, and clear engine state. */
     public async resetSession() {
         const core = this.api.runtime;
         const cfg = this.api.config;
         const route = core.channel.routing.resolveAgentRoute({
             cfg,
             channel: "mobile",
-            from: this.mobileDeviceId,
+            accountId: this.pairingId,
             peer: { kind: "direct", id: this.mobileDeviceId },
         });
         const storePath = core.channel.session.resolveStorePath(
             (cfg.session as Record<string, unknown> | undefined)?.store as string | undefined,
             { agentId: route.agentId },
         );
-        // Archive the session transcript file by renaming it (same as sessions.reset)
-        const sessionDir = storePath || join(homedir(), ".openclaw", "sessions");
-        const sessionFile = join(sessionDir, `${route.sessionKey}.json`);
-        const archiveName = `${route.sessionKey}.reset-${Date.now()}.json`;
-        const archiveFile = join(sessionDir, archiveName);
-        try {
-            await fs.rename(sessionFile, archiveFile);
-            console.log(`[MobileSync:${this.pairingId.slice(0,8)}] Archived session file: ${archiveName}`);
-        } catch (err: any) {
-            if (err.code !== "ENOENT") throw err;
-            // No session file yet — nothing to archive
+        // storePath points to the sessions store file (e.g. sessions.json), so dirname gives the sessions directory
+        const sessionDir = storePath ? dirname(storePath) : join(homedir(), ".openclaw", "sessions");
+
+        // 1. Read the current sessionId from the store, then update the entry with a new sessionId.
+        //    Transcript files are named by sessionId (UUID), not by sessionKey.
+        let oldSessionId: string | undefined;
+        if (storePath) {
+            try {
+                const raw = await fs.readFile(storePath, "utf-8");
+                const store = JSON.parse(raw) as Record<string, any>;
+                const entry = store[route.sessionKey];
+                if (entry) {
+                    oldSessionId = entry.sessionId;
+                    entry.sessionId = randomUUID();
+                    entry.updatedAt = Date.now();
+                    entry.systemSent = false;
+                    entry.abortedLastRun = false;
+                    entry.inputTokens = 0;
+                    entry.outputTokens = 0;
+                    entry.totalTokens = 0;
+                    entry.totalTokensFresh = true;
+                    await fs.writeFile(storePath, JSON.stringify(store, null, 2) + "\n", "utf-8");
+                    console.log(`[MobileSync:${this.pairingId.slice(0,8)}] Session store updated: old=${oldSessionId?.slice(0,8)}, new=${entry.sessionId.slice(0,8)}`);
+                }
+            } catch (err: any) {
+                console.error(`[MobileSync:${this.pairingId.slice(0,8)}] Failed to update session store:`, err.message);
+            }
         }
-        // Clear engine outbox and sent history
+
+        // 2. Archive the session transcript file by renaming it.
+        //    The transcript filename is {sessionId}.jsonl (NOT sessionKey).
+        if (oldSessionId) {
+            const sessionFile = join(sessionDir, `${oldSessionId}.jsonl`);
+            const archiveSuffix = `.reset.${new Date().toISOString().replace(/:/g, "-")}`;
+            const archiveFile = sessionFile + archiveSuffix;
+            try {
+                await fs.rename(sessionFile, archiveFile);
+                console.log(`[MobileSync:${this.pairingId.slice(0,8)}] Archived transcript: ${oldSessionId.slice(0,8)}.jsonl → …${archiveSuffix}`);
+            } catch (err: any) {
+                if (err.code !== "ENOENT") throw err;
+            }
+        }
+
+        // 3. Clear engine outbox and sent history
         this.outbox.clear();
         this.sentHistory.length = 0;
         this.processedIds.clear();
         this.processedIdsOrder.length = 0;
         this.activeSessionKeys.clear();
         this.scheduleSave();
+
+        // 4. Broadcast session-reset event to connected gateway clients (Chat Page)
+        if (this.gatewayBroadcast) {
+            this.gatewayBroadcast("mobile.session-reset", { sessionKey: route.sessionKey });
+        }
+
         console.log(`[MobileSync:${this.pairingId.slice(0,8)}] Session reset complete. sessionKey=${route.sessionKey}`);
     }
 

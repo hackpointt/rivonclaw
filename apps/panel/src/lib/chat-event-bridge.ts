@@ -37,6 +37,7 @@ export interface ToolSSEPayload {
 export type ChatEventBridgeCallbacks = {
   onAction: (action: RunAction) => void;
   onUserMessage: (msg: { text: string; timestamp: number; channel: string }) => void;
+  onSessionReset?: (sessionKey: string) => void;
 };
 
 export class ChatEventBridge {
@@ -91,6 +92,17 @@ export class ChatEventBridge {
         }
       } catch (err) {
         console.warn("[chat-event-bridge] malformed tool SSE data:", err);
+      }
+    });
+
+    sse.addEventListener("session-reset", (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data) as { sessionKey?: string };
+        if (data.sessionKey) {
+          this.callbacks.onSessionReset?.(data.sessionKey);
+        }
+      } catch (err) {
+        console.warn("[chat-event-bridge] malformed session-reset SSE data:", err);
       }
     });
 

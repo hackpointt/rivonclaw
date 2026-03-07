@@ -39,7 +39,7 @@ import { existsSync, unlinkSync, readFileSync, writeFileSync, statSync } from "n
 import { homedir } from "node:os";
 import { createTrayIcon } from "./tray-icon.js";
 import { buildTrayMenu } from "./tray-menu.js";
-import { startPanelServer } from "./panel-server.js";
+import { startPanelServer, pushChatSSE } from "./panel-server.js";
 import { stopCS } from "./customer-service-bridge.js";
 import { SttManager } from "./stt-manager.js";
 import { createCdpManager } from "./cdp-manager.js";
@@ -457,6 +457,14 @@ app.whenReady().then(async () => {
       },
       onClose: () => {
         log.info("Gateway RPC client disconnected");
+      },
+      onEvent: (evt) => {
+        if (evt.event === "mobile.session-reset") {
+          const payload = evt.payload as { sessionKey?: string } | undefined;
+          if (payload?.sessionKey) {
+            pushChatSSE("session-reset", { sessionKey: payload.sessionKey });
+          }
+        }
       },
     });
 

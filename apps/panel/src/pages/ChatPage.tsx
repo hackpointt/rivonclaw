@@ -714,6 +714,14 @@ export function ChatPage({ onAgentNameChange }: { onAgentNameChange?: (name: str
               channel: msg.channel,
             }]);
           },
+          onSessionReset: (sessionKey) => {
+            if (cancelled) return;
+            if (sessionKey !== sessionKeyRef.current) return;
+            setMessages([{ role: "assistant", text: `🔄 ${t("chat.resetCommandFeedback")}`, timestamp: Date.now() }]);
+            clearImages(sessionKeyRef.current).catch(() => {});
+            trackerRef.current.reset();
+            lastAgentStreamRef.current = null;
+          },
         });
         bridge.connect();
         bridgeRef.current = bridge;

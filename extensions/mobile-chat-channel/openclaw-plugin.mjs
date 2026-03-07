@@ -199,7 +199,7 @@ const plugin = {
         });
 
         // Start or update a sync engine for a specific paired phone
-        api.registerGatewayMethod("mobile_chat_start_sync", async ({ params, respond }) => {
+        api.registerGatewayMethod("mobile_chat_start_sync", async ({ params, respond, context }) => {
             const { pairingId, accessToken, relayUrl, desktopDeviceId, mobileDeviceId } = params;
             const engineKey = pairingId || "default";
             console.log(`[MobileChat Plugin] mobile_chat_start_sync. pairingId=${engineKey}, relayUrl=${relayUrl}`);
@@ -227,6 +227,7 @@ const plugin = {
                         desktopDeviceId,
                         mobileDeviceId || "default",
                     );
+                    engine.gatewayBroadcast = context?.broadcast ?? null;
                     engine.onUnpaired = () => {
                         console.log(`[MobileChat Plugin] Mobile unpaired pairingId=${engineKey}. Marking stale.`);
                         engine.stop();
