@@ -5,6 +5,7 @@ import { DEFAULT_SESSION_KEY, INITIAL_VISIBLE, FETCH_BATCH, parseRawMessages } f
 import { restoreImages } from "../../lib/image-cache.js";
 import { fetchChatSessions, updateChatSession } from "../../api/chat-sessions.js";
 import type { ChatSessionMeta } from "../../api/chat-sessions.js";
+import { trackEvent } from "../../api/index.js";
 
 const REFRESH_DEBOUNCE = 2000;
 const MAX_CACHED_SESSIONS = 20;
@@ -252,6 +253,7 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
     // 2. Update active key
     setActiveKey(key);
     activeKeyRef.current = key;
+    trackEvent("chat.session_switched");
 
     // 3. Restore from cache or fetch
     const cached = cacheRef.current.get(key);
@@ -301,6 +303,7 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
 
   const createNewChat = useCallback(async () => {
     const newKey = generateSessionKey();
+    trackEvent("chat.session_created");
 
     // Snapshot current session
     const currentState = getStateRef.current();
@@ -344,6 +347,7 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
   const archiveSession = useCallback(async (key: string) => {
     // Don't archive the main session
     if (key === DEFAULT_SESSION_KEY) return;
+    trackEvent("chat.session_archived");
 
     // Clean up local session tracking if it was panel-only
     const wasLocal = localSessionsRef.current.has(key);
@@ -444,6 +448,14 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
   const markUnread = useCallback((key: string) => {
     // Don't mark active session as unread
     if (key === activeKeyRef.current) return;
+    // Auto-restore archived sessions when they receive new messages —
+    // the session should reappear in the tab bar so the user notices it.
+    if (archivedKeysRef.current.has(key)) {
+      archivedKeysRef.current = new Set(
+        [...archivedKeysRef.current].filter((k) => k !== key),
+      );
+      updateChatSession(key, { archivedAt: null }).catch(() => {});
+    }
     setUnreadKeys((prev) => {
       if (prev.has(key)) return prev;
       const next = new Set(prev);
@@ -453,6 +465,7 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
   }, []);
 
   const restoreSession = useCallback(async (key: string) => {
+    trackEvent("chat.session_restored");
     // Remove from archived set
     archivedKeysRef.current = new Set(
       [...archivedKeysRef.current].filter((k) => k !== key),

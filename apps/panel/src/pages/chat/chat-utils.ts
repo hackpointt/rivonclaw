@@ -233,6 +233,38 @@ export function localizeError(raw: string, t: (key: string) => string): string {
 }
 
 /**
+ * Extract the delivered message text from a "message" tool_use block.
+ * Handles both Anthropic format (input object) and OpenAI format (arguments JSON string).
+ */
+function extractToolInputMessage(block: Record<string, unknown>): string | null {
+  // Try multiple field names / formats used by different LLM API layers:
+  //   - Anthropic:  { type: "tool_use",  input: { message: "..." } }
+  //   - Pi Agent:   { type: "toolCall",  arguments: { message: "..." } }  (object)
+  //   - OpenAI:     { type: "function_call", arguments: '{"message":"..."}' }  (JSON string)
+  for (const field of ["input", "arguments", "args"]) {
+    const val = block[field];
+    if (!val) continue;
+    // Object form — Anthropic `input` or Pi Agent `arguments`
+    if (typeof val === "object") {
+      const obj = val as Record<string, unknown>;
+      if (typeof obj.message === "string" && obj.message.trim()) {
+        return obj.message.trim();
+      }
+    }
+    // JSON string form — OpenAI `arguments`
+    if (typeof val === "string") {
+      try {
+        const parsed = JSON.parse(val) as Record<string, unknown>;
+        if (typeof parsed.message === "string" && parsed.message.trim()) {
+          return parsed.message.trim();
+        }
+      } catch { /* malformed JSON — skip */ }
+    }
+  }
+  return null;
+}
+
+/**
  * Content block types that represent tool calls across different API formats:
  * - tool_use / tooluse: Anthropic format
  * - tool_call / toolcall: generic format
@@ -256,7 +288,7 @@ function isToolCallBlock(block: Record<string, unknown>): boolean {
  * visibility is controlled at render time via the preserveToolEvents setting.
  */
 export function parseRawMessages(
-  raw?: Array<{ role?: string; content?: unknown; timestamp?: number; idempotencyKey?: string }>,
+  raw?: Array<{ role?: string; content?: unknown; timestamp?: number; idempotencyKey?: string; provenance?: unknown }>,
 ): ChatMessage[] {
   if (!raw) return [];
   const parsed: ChatMessage[] = [];
@@ -276,6 +308,17 @@ export function parseRawMessages(
           entry.isExternal = true;
           entry.channel = "cron";
         }
+        // Mark inter-session or external-provenance user messages as external.
+        // sessions_send stores user messages with provenance.kind = "inter_session";
+        // voice transcripts use provenance.kind = "external_user".
+        // These should render on the agent (left) side, not the user (right) side.
+        if (msg.role === "user" && !entry.isExternal && msg.provenance && typeof msg.provenance === "object") {
+          const prov = msg.provenance as { kind?: string; sourceTool?: string; sourceChannel?: string };
+          if (prov.kind === "inter_session" || prov.kind === "external_user" || prov.kind === "internal_system") {
+            entry.isExternal = true;
+            entry.channel = prov.sourceTool ?? prov.sourceChannel ?? prov.kind;
+          }
+        }
         parsed.push(entry);
       }
       if (msg.role === "assistant" && Array.isArray(msg.content)) {
@@ -283,6 +326,16 @@ export function parseRawMessages(
           const b = block as Record<string, unknown>;
           if (isToolCallBlock(b) && typeof b.name === "string") {
             parsed.push({ role: "tool-event", text: b.name, toolName: b.name, timestamp: msg.timestamp ?? 0 });
+            // Extract delivered text from outbound message tool calls.
+            // The "message" tool sends text to external channels; the actual
+            // message content lives in input.message (Anthropic format) or
+            // arguments JSON (OpenAI format), NOT in type:"text" blocks.
+            if (b.name === "message") {
+              const delivered = extractToolInputMessage(b);
+              if (delivered) {
+                parsed.push({ role: "assistant", text: delivered, timestamp: msg.timestamp ?? 0 });
+              }
+            }
           }
         }
       }

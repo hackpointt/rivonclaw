@@ -36,7 +36,18 @@ export function ChatPage({ onAgentNameChange }: { onAgentNameChange?: (name: str
   // Derive run lifecycle state from tracker (single source of truth)
   const view = trackerRef.current.getView();
   const runId = view.localRunId;
-  const streaming = view.localStreaming;
+  // Use displayStreaming (covers both local and external runs) so the streaming
+  // cursor appears for external-channel runs (mobile, Telegram, etc.), not just
+  // for messages typed in the panel.
+  //
+  // TODO(future): This only shows a generic streaming cursor for external runs.
+  // Message tool deliveries (agent explicitly sending messages to the user) are
+  // invisible until chat.final triggers loadHistory. To show them in real time,
+  // register an `after_tool_call` plugin hook that intercepts toolName==="message",
+  // then broadcast a `chat` event with state==="delivery" to all WS clients.
+  // The hook needs a captured `broadcast` ref from GatewayRequestContext — see
+  // mobile-chat-channel/openclaw-plugin.mjs L190 for the existing pattern.
+  const streaming = view.displayStreaming;
   const [showAgentEvents, setShowAgentEvents] = useState(true);
   const [preserveToolEvents, setPreserveToolEvents] = useState(false);
   const [collapseMessages, setCollapseMessages] = useState(true);
@@ -207,6 +218,7 @@ export function ChatPage({ onAgentNameChange }: { onAgentNameChange?: (name: str
 
   // Prune stale image cache entries (older than 30 days) on mount
   useEffect(() => { clearImages().catch(() => {}); }, []);
+
 
   // Load chat history once connected
   const loadHistory = useCallback(async (client: GatewayChatClient) => {
@@ -508,11 +520,30 @@ export function ChatPage({ onAgentNameChange }: { onAgentNameChange?: (name: str
         }
       }
     } else if (chatRunId) {
-      // External run — handle completion
+      // External run — handle completion.
+      //
+      // TODO(future): During external runs, the panel only receives chat events
+      // (streaming deltas) and lifecycle events — NOT tool events (they are only
+      // sent to registered WS recipients, i.e. the client that initiated the run).
+      // This means message-tool deliveries are invisible until chat.final, when
+      // loadHistory fetches the full transcript and extractToolInputMessage()
+      // recovers the delivered text from tool_use blocks.
+      //
+      // Proper fix: add an `after_tool_call` plugin hook in easyclaw-tools that
+      // intercepts toolName==="message" and broadcasts a chat event with
+      // state==="delivery" to ALL connected clients (not just registered ones).
+      // Then handle state==="delivery" here to append the message in real time.
       if (payload.state === "error") {
         console.error("[chat] external run error:", payload.errorMessage ?? "unknown error", "runId:", chatRunId);
       }
       if (payload.state === "final") {
+        // Immediately commit the final text so the user sees it without waiting
+        // for loadHistory. The subsequent loadHistory will replace all messages
+        // with the canonical transcript, but this avoids a visible gap.
+        const finalText = extractText(payload.message?.content);
+        if (finalText) {
+          setMessages((prev) => [...prev, { role: "assistant", text: finalText, timestamp: Date.now() }]);
+        }
         // DEBUG: log external final that triggers history reload
         console.info("[chat] external final → reloading history: runId=%s localRunId=%s",
           chatRunId, tracker.getLocalRunId());
@@ -795,6 +826,7 @@ export function ChatPage({ onAgentNameChange }: { onAgentNameChange?: (name: str
 
   function handleModelChange(newModel: string) {
     if (!activeModel || newModel === activeModel.model) return;
+    trackEvent("chat.model_switched", { provider: activeModel.provider, model: newModel });
     configManager.switchModel(activeModel.keyId, newModel)
       .then(() => setActiveModel((prev) => prev ? { ...prev, model: newModel } : null))
       .catch((err) => {
