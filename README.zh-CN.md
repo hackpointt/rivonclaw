@@ -336,6 +336,13 @@ pnpm format       # 检查
 pnpm format:fix   # 自动修复
 ```
 
+## 社区讨论
+
+- **海外 Telegram 群**：[加入讨论群](https://t.me/+IN_vVZxckbgxODIx)
+- **中国大陆微信群**：扫码加入
+
+  <img src="assets/wechat-group-qr.png" width="200" alt="微信讨论群二维码">
+
 ## 许可证
 
 详见 [LICENSE](LICENSE)。

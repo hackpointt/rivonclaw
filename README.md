@@ -337,6 +337,13 @@ pnpm format       # Check
 pnpm format:fix   # Auto-fix
 ```
 
+## Community
+
+- **Telegram** (International): [Join Discussion Group](https://t.me/+IN_vVZxckbgxODIx)
+- **WeChat** (中国大陆): Scan to join
+
+  <img src="assets/wechat-group-qr.png" width="200" alt="WeChat Group QR Code">
+
 ## License
 
 See [LICENSE](LICENSE) for details.
