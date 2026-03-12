@@ -783,7 +783,7 @@ app.whenReady().then(async () => {
   // Create main panel window (hidden initially, loaded when gateway starts)
   const isDev = !!process.env.PANEL_DEV_URL;
   mainWindow = new BrowserWindow({
-    width: isDev ? 1800 : 1200,
+    width: isDev ? 2000 : 1400,
     height: 800,
     show: false,
     title: "EasyClaw",

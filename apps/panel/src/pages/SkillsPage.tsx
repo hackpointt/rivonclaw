@@ -190,9 +190,11 @@ export function SkillsPage() {
   }, [confirmDelete, installedSkills]);
 
   return (
-    <div className="page-enter">
-      <h1>{t("skills.title")}</h1>
-      <p>{t("skills.description")}</p>
+    <div className="page-enter skills-page">
+      <div className="skills-page-header">
+        <h1>{t("skills.title")}</h1>
+        <p className="skills-page-subtitle">{t("skills.description")}</p>
+      </div>
 
       {error && (
         <div className="error-alert">
@@ -201,16 +203,20 @@ export function SkillsPage() {
       )}
 
       {/* Tab bar */}
-      <div className="skills-tab-bar">
+      <div className="skills-tab-bar" role="tablist" aria-label={t("skills.title")}>
         <button
-          className={`btn ${activeTab === "market" ? "btn-outline" : "btn-secondary"}`}
+          className={`skills-tab-btn${activeTab === "market" ? " skills-tab-btn-active" : ""}`}
           onClick={() => setActiveTab("market")}
+          role="tab"
+          aria-selected={activeTab === "market"}
         >
           {t("skills.tabMarket")}
         </button>
         <button
-          className={`btn ${activeTab === "installed" ? "btn-outline" : "btn-secondary"}`}
+          className={`skills-tab-btn${activeTab === "installed" ? " skills-tab-btn-active" : ""}`}
           onClick={() => setActiveTab("installed")}
+          role="tab"
+          aria-selected={activeTab === "installed"}
         >
           {t("skills.tabInstalled")}
         </button>
@@ -264,32 +270,38 @@ export function SkillsPage() {
           {!loading && marketSkills.length > 0 && (
             <div className="skills-grid">
               {marketSkills.map((skill) => (
-                <div key={skill.slug} className="section-card">
-                  <div className="skill-card-name">
-                    {isCN ? skill.name_zh || skill.name_en : skill.name_en}
-                  </div>
-                  <div className="skill-card-desc">
-                    {isCN ? skill.desc_zh || skill.desc_en : skill.desc_en}
-                  </div>
-                  {skill.labels.length > 0 && (
-                    <div className="skill-card-labels">
-                      {skill.labels.map((label) => (
-                        <span
-                          key={label}
-                          className={LABEL_BADGE_MAP[label] ?? "badge badge-muted"}
-                        >
-                          {LABEL_I18N_MAP[label] ? t(LABEL_I18N_MAP[label]) : label}
-                        </span>
-                      ))}
+                <div key={skill.slug} className="section-card skill-market-card">
+                  <div className="skill-card-top">
+                    <div className="skill-card-name">
+                      {isCN ? skill.name_zh || skill.name_en : skill.name_en}
                     </div>
-                  )}
-                  <div className="skill-card-meta">
-                    <span>{t("skills.author", { author: skill.author })}</span>
-                    <span>{t("skills.version", { version: skill.version })}</span>
-                    <span>{t("skills.stars", { count: skill.stars })}</span>
-                    <span>{t("skills.downloads", { count: skill.downloads })}</span>
+                    <div className="skill-card-version">
+                      <span>{skill.version}</span>
+                    </div>
                   </div>
-                  <div className="skill-card-actions">
+                  <div className="skill-card-body">
+                    <div className="skill-card-desc">
+                      {isCN ? skill.desc_zh || skill.desc_en : skill.desc_en}
+                    </div>
+                    {skill.labels.length > 0 && (
+                      <div className="skill-card-labels">
+                        {skill.labels.map((label) => (
+                          <span
+                            key={label}
+                            className={LABEL_BADGE_MAP[label] ?? "badge badge-muted"}
+                          >
+                            {LABEL_I18N_MAP[label] ? t(LABEL_I18N_MAP[label]) : label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="skill-card-bottom">
+                    <div className="skill-card-meta">
+                      <span>{t("skills.author", { author: skill.author })}</span>
+                      <span>{t("skills.stars", { count: skill.stars })}</span>
+                      <span>{t("skills.downloads", { count: skill.downloads })}</span>
+                    </div>
                     {bundledSlugs.has(skill.slug) ? (
                       <button className="btn btn-secondary btn-sm" disabled>
                         {t("skills.builtIn")}
