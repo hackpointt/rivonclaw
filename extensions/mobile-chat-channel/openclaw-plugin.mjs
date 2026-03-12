@@ -184,8 +184,7 @@ const plugin = {
                     async sendText(ctx) {
                         const engine = resolveEngine(ctx.to);
                         if (!engine) {
-                            console.warn(`[MobileChat Plugin] sendText: no engine for to=${ctx.to} (engines=${syncEngines.size})`);
-                            return { channel: "mobile", messageId: randomUUID(), chatId: ctx.to ?? "mobile" };
+                            throw new Error(`Mobile channel is not connected for target: ${ctx.to ?? "unknown"}`);
                         }
                         engine.queueOutbound(ctx.to, { type: 'text', text: ctx.text });
                         return { channel: "mobile", messageId: randomUUID(), chatId: ctx.to ?? "mobile" };
@@ -193,8 +192,10 @@ const plugin = {
                     async sendMedia(ctx) {
                         const engine = resolveEngine(ctx.to);
                         if (!engine) {
-                            console.warn(`[MobileChat Plugin] sendMedia: no engine for to=${ctx.to} (engines=${syncEngines.size})`);
-                            return { channel: "mobile", messageId: randomUUID(), chatId: ctx.to ?? "mobile" };
+                            throw new Error(`Mobile channel is not connected for target: ${ctx.to ?? "unknown"}`);
+                        }
+                        if (!ctx.mediaUrl?.trim()) {
+                            throw new Error("Mobile channel sendMedia requires mediaUrl.");
                         }
                         try {
                             const source = ctx.mediaUrl;
@@ -211,9 +212,7 @@ const plugin = {
                             }
                             if (buf.length > RELAY_MAX_CLIENT_BYTES) {
                                 const sizeMB = (buf.length / (1024 * 1024)).toFixed(1);
-                                console.error(`[MobileChat Plugin] File too large (${sizeMB} MB), skipping send`);
-                                engine.queueOutbound(ctx.to, { type: 'text', text: `[File too large: ${sizeMB} MB, limit is ${RELAY_MAX_CLIENT_MB} MB]` });
-                                return { channel: "mobile", messageId: randomUUID(), chatId: ctx.to ?? "mobile" };
+                                throw new Error(`Mobile channel file too large (${sizeMB} MB). Limit is ${RELAY_MAX_CLIENT_MB} MB.`);
                             }
                             const mimeType = MIME_BY_EXT[ext] || "application/octet-stream";
                             const isImage = mimeType.startsWith("image/");
@@ -226,8 +225,9 @@ const plugin = {
                                 fileName,
                             });
                         } catch (err) {
-                            console.error("[MobileChat Plugin] Failed to read media file:", ctx.mediaUrl, err);
-                            engine.queueOutbound(ctx.to, { type: 'text', text: ctx.text || '[File]' });
+                            const message = err instanceof Error ? err.message : String(err);
+                            console.error("[MobileChat Plugin] Failed to send media file:", ctx.mediaUrl, err);
+                            throw new Error(`Mobile channel media send failed: ${message}`);
                         }
                         return { channel: "mobile", messageId: randomUUID(), chatId: ctx.to ?? "mobile" };
                     },
