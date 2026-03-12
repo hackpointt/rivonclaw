@@ -6,6 +6,7 @@ dist/
 .turbo/
 .vscode/
 .claude/
+.codex/
 *.tsbuildinfo
 .DS_Store
 server/
@@ -16,5 +17,6 @@ test-results/
 .venv/
 .env
 CLAUDE.md
+CODEX.md
 ANTIGRAVITY.md
 tmp/
