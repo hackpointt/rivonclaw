@@ -244,11 +244,22 @@ function createStagingDir() {
   // Copy vendor/openclaw to staging, dereferencing symlinks and excluding .git.
   // Use tar with -h flag to dereference symlinks (works on macOS, Linux, and
   // Windows via Git for Windows which includes tar).
+  //
+  // pnpm workspace packages (moltbot, clawdbot) have symlinks like
+  //   packages/moltbot/node_modules/openclaw -> ../../..
+  // which point back to the vendor root. With tar -h (dereference), this creates
+  // infinite recursion. We exclude these self-referencing workspace symlinks.
+  // We also exclude .pnpm/node_modules/openclaw which is a similar hoisted link.
   const vendorParent = path.dirname(vendorDir);
   const vendorBase = path.basename(vendorDir);
   fs.mkdirSync(path.join(stagingParent, vendorBase), { recursive: true });
+  const tarExcludes = [
+    "--exclude=.git",
+    "--exclude=*/packages/*/node_modules/openclaw",
+    "--exclude=*/node_modules/.pnpm/node_modules/openclaw",
+  ].join(" ");
   execSync(
-    `tar chf - --exclude=.git -C "${vendorParent}" "${vendorBase}" | tar xf - -C "${stagingParent}"`,
+    `tar chf - ${tarExcludes} -C "${vendorParent}" "${vendorBase}" | tar xf - -C "${stagingParent}"`,
     { stdio: "inherit", timeout: 300_000 },
   );
 
