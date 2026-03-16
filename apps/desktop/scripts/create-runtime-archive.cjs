@@ -35,9 +35,9 @@ const path = require("path");
 
 const { writeManifest, MANIFEST_FILENAME } = require("./runtime-manifest.cjs");
 const {
-  EXTERNAL_PACKAGES,
+  ALWAYS_EXTERNAL_PACKAGES,
   RUNTIME_REQUIRED_PACKAGES,
-  matchesExternalPackage,
+  matchesPackagePattern,
 } = require("../../../scripts/vendor-runtime-packages.cjs");
 
 // ─── Paths (read-only source) ───
@@ -352,7 +352,7 @@ function verifyKeepSetTopLevel(keepSet) {
     for (const pkg of missing.sort()) console.error(`  ${pkg}`);
     console.error(`\nThese packages are needed at runtime but pnpm did not hoist them.`);
     console.error(`This usually means a new vendor dependency introduced a non-hoisted transitive dep.`);
-    console.error(`Fix: add the package to EXTERNAL_PACKAGES in scripts/vendor-runtime-packages.cjs,`);
+    console.error(`Fix: add the package to ALWAYS_EXTERNAL_PACKAGES in scripts/vendor-runtime-packages.cjs,`);
     console.error(`or investigate why the metafile reports it as a runtime external.\n`);
     process.exit(1);
   }
@@ -794,30 +794,128 @@ function createVendorHealthIntervalPatchPlugin() {
 }
 
 /**
- * Filter EXTERNAL_PACKAGES to only include packages that actually exist in the
- * staging node_modules. Packages missing from node_modules (e.g. because
- * node-linker=hoisted decided not to hoist them) are removed from the external
- * list so esbuild bundles them inline instead of leaving a dangling runtime import.
+ * Scan a package directory for native module indicators:
+ * - .node files (compiled native addons)
+ * - binding.gyp (node-gyp build file)
+ * - prebuild-install in dependencies (prebuilt native binaries)
+ * @param {string} pkgDir
+ * @returns {boolean}
  */
-function resolveAvailableExternals() {
-  const available = [];
-  const bundled = [];
-  for (const pattern of EXTERNAL_PACKAGES) {
-    if (pattern.endsWith("/*") || pattern.endsWith("-*")) {
-      // Glob/wildcard patterns: keep as-is (they match native/special packages)
-      available.push(pattern);
-    } else {
-      const pkgDir = path.join(nmDir, pattern);
-      if (fs.existsSync(pkgDir)) {
-        available.push(pattern);
-      } else {
-        bundled.push(pattern);
+function hasNativeIndicators(pkgDir) {
+  // Check for binding.gyp at package root
+  if (fs.existsSync(path.join(pkgDir, "binding.gyp"))) return true;
+
+  // Check for prebuild-install dependency
+  try {
+    const pkgJson = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf-8"));
+    const allDeps = { ...pkgJson.dependencies, ...pkgJson.devDependencies };
+    if (allDeps["prebuild-install"] || allDeps["node-pre-gyp"] || allDeps["@mapbox/node-pre-gyp"] || allDeps["node-gyp-build"] || allDeps["cmake-js"]) {
+      return true;
+    }
+    // Check install scripts that typically compile native code
+    if (pkgJson.scripts?.install || pkgJson.scripts?.preinstall || pkgJson.scripts?.postinstall) {
+      const scripts = [pkgJson.scripts.install, pkgJson.scripts.preinstall, pkgJson.scripts.postinstall].filter(Boolean).join(" ");
+      if (/\b(node-gyp|prebuild-install|node-pre-gyp|cmake-js|napi)\b/.test(scripts)) return true;
+    }
+  } catch {}
+
+  // Recursively scan for .node files (limit depth to avoid deep traversals)
+  /** @param {string} dir @param {number} depth @returns {boolean} */
+  const findNodeFile = (dir, depth) => {
+    if (depth > 4) return false;
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isFile() && entry.name.endsWith(".node")) return true;
+        if (entry.isDirectory() && findNodeFile(fullPath, depth + 1)) return true;
+      }
+    } catch {}
+    return false;
+  };
+  return findNodeFile(pkgDir, 0);
+}
+
+/**
+ * Auto-detect external packages by scanning staging node_modules for native
+ * modules, then merge with the minimal ALWAYS_EXTERNAL_PACKAGES list.
+ *
+ * Missing packages (not in node_modules) are always treated as external —
+ * they are platform-specific optional deps that should never be bundled.
+ *
+ * Returns the effective externals list (patterns for esbuild).
+ */
+function detectExternalPackages() {
+  const autoDetected = [];
+  const alreadyCoveredByAlways = new Set();
+
+  // Scan all top-level packages in node_modules for native indicators
+  if (fs.existsSync(nmDir)) {
+    for (const entry of fs.readdirSync(nmDir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.name.startsWith("@")) {
+        // Scoped packages
+        const scopeDir = path.join(nmDir, entry.name);
+        try {
+          for (const scopeEntry of fs.readdirSync(scopeDir, { withFileTypes: true })) {
+            const pkgName = `${entry.name}/${scopeEntry.name}`;
+            const pkgDir = path.join(scopeDir, scopeEntry.name);
+            if (scopeEntry.isDirectory() && hasNativeIndicators(pkgDir)) {
+              // Check if already covered by ALWAYS_EXTERNAL_PACKAGES
+              if (ALWAYS_EXTERNAL_PACKAGES.some((p) => matchesPackagePattern(pkgName, p))) {
+                alreadyCoveredByAlways.add(pkgName);
+              } else {
+                autoDetected.push(pkgName);
+              }
+            }
+          }
+        } catch {}
+      } else if (entry.isDirectory()) {
+        const pkgDir = path.join(nmDir, entry.name);
+        if (hasNativeIndicators(pkgDir)) {
+          if (ALWAYS_EXTERNAL_PACKAGES.some((p) => matchesPackagePattern(entry.name, p))) {
+            alreadyCoveredByAlways.add(entry.name);
+          } else {
+            autoDetected.push(entry.name);
+          }
+        }
       }
     }
   }
-  if (bundled.length > 0) {
-    log(`${bundled.length} EXTERNAL_PACKAGES not in node_modules, will be bundled inline: ${bundled.join(", ")}`);
+
+  // Merge: ALWAYS_EXTERNAL_PACKAGES + auto-detected native modules
+  const effectiveExternals = [...ALWAYS_EXTERNAL_PACKAGES, ...autoDetected];
+
+  // Filter out non-wildcard patterns that are missing from node_modules.
+  // Missing packages are kept as external (never attempt to bundle them)
+  // so esbuild emits a bare import that fails loudly at runtime if needed.
+  const available = [];
+  const missing = [];
+  for (const pattern of effectiveExternals) {
+    if (pattern.endsWith("/*") || pattern.endsWith("-*")) {
+      available.push(pattern);
+    } else {
+      // Both present and missing packages stay external — missing ones are
+      // platform-specific optional deps that should not be bundled.
+      available.push(pattern);
+      if (!fs.existsSync(path.join(nmDir, pattern))) {
+        missing.push(pattern);
+      }
+    }
   }
+
+  // Diagnostic logging
+  if (autoDetected.length > 0) {
+    log(`Auto-detected ${autoDetected.length} native module(s): ${autoDetected.join(", ")}`);
+  }
+  if (alreadyCoveredByAlways.size > 0) {
+    log(`${alreadyCoveredByAlways.size} native module(s) already in ALWAYS_EXTERNAL_PACKAGES: ${[...alreadyCoveredByAlways].join(", ")}`);
+  }
+  if (missing.length > 0) {
+    log(`${missing.length} external package(s) not in node_modules (platform-specific, kept external): ${missing.join(", ")}`);
+  }
+  log(`Effective externals: ${available.length} patterns (${ALWAYS_EXTERNAL_PACKAGES.length} always + ${autoDetected.length} auto-detected)`);
+
   return available;
 }
 
@@ -835,10 +933,9 @@ async function bundleEntryJs() {
   // hoist to the top level, without mutating the staging dir.
   const pnpmNodePaths = collectPnpmNodePaths();
 
-  // Only keep EXTERNAL_PACKAGES that exist in staging node_modules.
-  // Missing packages (e.g. due to node-linker=hoisted dedup conflicts)
-  // get bundled inline instead of left as dangling runtime imports.
-  const effectiveExternals = resolveAvailableExternals();
+  // Auto-detect native modules and merge with ALWAYS_EXTERNAL_PACKAGES.
+  // Missing packages are kept external (platform-specific optional deps).
+  const effectiveExternals = detectExternalPackages();
 
   const t0 = Date.now();
   const result = await esbuild.build({
@@ -1096,6 +1193,8 @@ function parsePnpmDirName(dirName) {
 
 /**
  * BFS from seed packages to find all transitive deps to keep.
+ * Seeds are derived from actual bundle externals (usedExternals from esbuild
+ * metafile) plus any extra seeds, NOT from a hardcoded list.
  * Packages are resolved from the top-level node_modules (which includes
  * hoisted pnpm deps from the staging setup phase).
  */
@@ -1104,12 +1203,16 @@ function buildKeepSet(extraSeeds = new Set()) {
   /** @type {string[]} */
   const queue = [];
 
-  // Seed with packages that bundles actually use as runtime externals
+  // Seed with packages that bundles actually use as runtime externals.
+  // This is the key change: seeds come from esbuild metafile (actual imports)
+  // rather than a hardcoded list. The caller passes usedExternals as extraSeeds.
   for (const pkg of extraSeeds) {
     queue.push(pkg);
   }
 
-  for (const pattern of EXTERNAL_PACKAGES) {
+  // Also expand any wildcard patterns from ALWAYS_EXTERNAL_PACKAGES that
+  // might match installed packages (these are runtime-loaded, not in metafile).
+  for (const pattern of ALWAYS_EXTERNAL_PACKAGES) {
     if (pattern.endsWith("/*")) {
       const scope = pattern.slice(0, pattern.indexOf("/"));
       try { for (const entry of fs.readdirSync(path.join(nmDir, scope))) queue.push(`${scope}/${entry}`); } catch {}
@@ -1121,7 +1224,11 @@ function buildKeepSet(extraSeeds = new Set()) {
       } else {
         try { for (const entry of fs.readdirSync(nmDir)) { if (entry.startsWith(prefix)) queue.push(entry); } } catch {}
       }
-    } else {
+    }
+    // Non-wildcard patterns: only add if they aren't already in extraSeeds
+    // (they would be there if actually imported). Add them anyway as safety net
+    // for runtime-loaded packages not visible in esbuild metafile.
+    else {
       queue.push(pattern);
     }
   }
@@ -1187,7 +1294,7 @@ function cleanupNodeModules(usedExternals = new Set()) {
   // Diagnostic: verify critical runtime packages are in keepSet
   for (const critical of ["@sinclair/typebox", "undici", "ws"]) {
     if (!keepSet.has(critical)) {
-      log(`WARNING: ${critical} is NOT in keepSet but is in EXTERNAL_PACKAGES`);
+      log(`WARNING: ${critical} is NOT in keepSet but is expected at runtime`);
     }
   }
 
@@ -1273,7 +1380,7 @@ function verifyExternalImports(/** @type {Set<string>} */ allExternals, /** @typ
 
   for (const pkg of [...packagesToVerify].sort()) {
     if (isNodeBuiltin(pkg)) continue;
-    if (!matchesExternalPackage(pkg)) continue;
+    if (!ALWAYS_EXTERNAL_PACKAGES.some((p) => matchesPackagePattern(pkg, p)) && !keepSet.has(pkg)) continue;
     if (!keepSet.has(pkg) || !fs.existsSync(path.join(nmDir, pkg))) continue; // never installed or not kept, expected
     verified++;
   }

@@ -1,28 +1,13 @@
 // Shared runtime package allowlist for vendor/openclaw bundling + verification.
-// Keep this as the single source of truth for packages that must survive
-// bundling/pruning because they are loaded natively or via runtime resolution.
+//
+// Native modules are now AUTO-DETECTED by scanning node_modules for .node files,
+// binding.gyp, or prebuild-install markers. Only packages that cannot be
+// auto-detected (dynamic requires, runtime-resolution, shared runtime libs)
+// need to be listed here.
 
-const EXTERNAL_PACKAGES = [
-  // OpenAI Codex OAuth no longer keeps the full pi-ai package at runtime.
-  // create-runtime-archive extracts the upstream oauth helper into vendor/dist.
-
-  // Native modules (contain .node or .dylib binaries)
-  "sharp",
-  "@img/*",
-  "koffi",
-  "@napi-rs/canvas",
-  "@napi-rs/canvas-*",
-  "@lydell/node-pty",
-  "@lydell/node-pty-*",
-  "@matrix-org/matrix-sdk-crypto-nodejs",
-  "@discordjs/opus",
-  "sqlite-vec",
-  "sqlite-vec-*",
-  "@snazzah/*",
-  "better-sqlite3",
-  "@lancedb/lancedb",
-  "@lancedb/lancedb-*",
-
+// Packages that MUST be external but cannot be auto-detected by scanning for
+// native binaries. Keep this list minimal — add a comment for every entry.
+const ALWAYS_EXTERNAL_PACKAGES = [
   // Complex dynamic loading patterns (runtime fs access, .proto files, etc.)
   "ajv",
   "protobufjs",
@@ -32,11 +17,9 @@ const EXTERNAL_PACKAGES = [
   "chromium-bidi",
   "chromium-bidi/*",
 
-  // Optional/missing (may not be installed, referenced in try/catch)
-  "ffmpeg-static",
-  "authenticate-pam",
-  "esbuild",
-  "node-llama-cpp",
+  // Pino uses worker_threads with dynamic file paths at runtime
+  "pino",
+  "pino-pretty",
 
   // Proxy dependency (needed by proxy-setup.cjs via createRequire)
   "undici",
@@ -48,6 +31,13 @@ const EXTERNAL_PACKAGES = [
   "@sinclair/typebox",
   "@sinclair/typebox/*",
 ];
+
+// Legacy alias — the full effective externals list is now computed at bundle
+// time by merging ALWAYS_EXTERNAL_PACKAGES with auto-detected native modules.
+// This export is kept for check-extension-externals.mjs compatibility; it
+// receives the union list from create-runtime-archive at build time, but for
+// static checks it falls back to the always-external list.
+const EXTERNAL_PACKAGES = ALWAYS_EXTERNAL_PACKAGES;
 
 const RUNTIME_REQUIRED_PACKAGES = [];
 
@@ -69,6 +59,7 @@ function isAllowlistedVendorRuntimeSpecifier(specifier) {
 }
 
 module.exports = {
+  ALWAYS_EXTERNAL_PACKAGES,
   EXTERNAL_PACKAGES,
   RUNTIME_REQUIRED_PACKAGES,
   isAllowlistedVendorRuntimeSpecifier,
