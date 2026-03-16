@@ -1,4 +1,4 @@
-import { stripReasoningTagsFromText } from "@openclaw/reasoning-tags";
+import { stripReasoningTagsFromText } from "@easyclaw/core";
 
 export type ChatImage = { data: string; mimeType: string };
 
