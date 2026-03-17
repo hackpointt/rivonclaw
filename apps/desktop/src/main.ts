@@ -501,7 +501,7 @@ app.whenReady().then(async () => {
   // In dev, resolveVendorEntryPath() resolves relative to source via import.meta.url.
   const vendorDir = app.isPackaged
     ? join(process.resourcesPath, "vendor", "openclaw")
-    : undefined;
+    : join(import.meta.dirname, "..", "..", "..", "vendor", "openclaw");
 
   const launcher = new GatewayLauncher({
     entryPath: resolveVendorEntryPath(vendorDir),
@@ -1632,8 +1632,7 @@ app.whenReady().then(async () => {
   // Write the proxy setup CJS module once and build the NODE_OPTIONS string.
   // This is reused by all restart paths (handleSttChange, handlePermissionsChange)
   // so the --require is never accidentally dropped.
-  const resolvedVendorDir = vendorDir ?? join(import.meta.dirname, "..", "..", "..", "vendor", "openclaw");
-  const proxySetupPath = writeProxySetupModule(stateDir, resolvedVendorDir);
+  const proxySetupPath = writeProxySetupModule(stateDir, vendorDir);
   // Quote the path — Windows usernames with spaces break unquoted --require
   const gatewayNodeOptions = `--require "${proxySetupPath.replaceAll("\\", "/")}"`;
 

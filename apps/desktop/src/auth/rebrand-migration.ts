@@ -4,7 +4,7 @@
 
 import { homedir, hostname, userInfo } from "node:os";
 import { join } from "node:path";
-import { existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { platform } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -20,15 +20,29 @@ const OLD_SERVICE_PREFIX = "easyclaw/";
 const NEW_SERVICE_PREFIX = "rivonclaw/";
 const NEW_ACCOUNT = "rivonclaw";
 
+/** Relative paths (from ~/.easyclaw) that contain irreplaceable user data. */
+const PATHS_TO_COPY = [
+  "db.sqlite",
+  "secrets",
+  "openclaw/credentials",
+  "openclaw/session-state",
+  "openclaw/delivery-queue",
+  "openclaw/devices",
+  "openclaw/feishu",
+  "openclaw/mobile-sync",
+  "openclaw/media",
+];
+
 /**
  * One-time migration from EasyClaw → RivonClaw.
  *
- * Renames ~/.easyclaw → ~/.rivonclaw, re-encrypts file-based secrets
- * (Windows/Linux), and migrates macOS Keychain entries.
+ * Selectively copies irreplaceable user data from ~/.easyclaw → ~/.rivonclaw,
+ * re-encrypts file-based secrets (Windows/Linux), and migrates macOS Keychain
+ * entries.
  *
- * If ~/.rivonclaw already exists from a previous launch (without migration),
- * it is removed first — it only contains empty initialized data, while
- * ~/.easyclaw has the user's real data.
+ * If ~/.rivonclaw already exists (e.g. from a previous launch that initialized
+ * an empty db/schema), the copied data is merged into it — existing files are
+ * overwritten with the real data from ~/.easyclaw.
  *
  * Migration failure does NOT prevent the app from starting.
  */
@@ -51,22 +65,13 @@ export async function migrateFromEasyClaw(): Promise<void> {
       return;
     }
 
-    log.info("Starting rebrand migration: ~/.easyclaw → ~/.rivonclaw");
+    log.info("Starting rebrand migration: ~/.easyclaw → ~/.rivonclaw (selective copy)");
 
-    // If ~/.rivonclaw was created by a previous launch (before migration
-    // existed), remove it — it only has empty init data (db schema, no keys).
-    // The real user data is in ~/.easyclaw.
-    if (existsSync(newDir)) {
-      rmSync(newDir, { recursive: true, force: true });
-      log.info("Removed pre-existing empty ~/.rivonclaw");
-    }
+    // Ensure the target directory exists (may already exist from app init)
+    mkdirSync(newDir, { recursive: true });
 
-    // Instant rename — same filesystem, no copy needed
-    renameSync(oldDir, newDir);
-    log.info("Renamed ~/.easyclaw → ~/.rivonclaw");
-
-    // Replace "easyclaw" references in the openclaw config file
-    replaceInConfig(join(newDir, "openclaw", "openclaw.json"));
+    // Selectively copy irreplaceable user data
+    copyUserData(oldDir, newDir);
 
     // Migrate secrets
     if (platform() === "darwin") {
@@ -78,32 +83,49 @@ export async function migrateFromEasyClaw(): Promise<void> {
     // Write marker — after this point migration never runs again
     writeFileSync(marker, new Date().toISOString(), "utf-8");
     log.info("Rebrand migration complete");
+
+    // Best-effort cleanup of old directory
+    try {
+      rmSync(oldDir, { recursive: true, force: true });
+      log.info("Removed old ~/.easyclaw");
+    } catch (cleanupErr) {
+      log.warn("Could not remove old ~/.easyclaw (Windows file locks?):", cleanupErr);
+    }
   } catch (err) {
     log.error("Rebrand migration failed (app will continue):", err);
   }
 }
 
 /**
- * Replace stale "easyclaw" references in a JSON config file.
+ * Copy each entry in PATHS_TO_COPY from oldDir to newDir.
+ * Files are copied with `copyFileSync`; directories with `cpSync` (recursive).
+ * Missing source paths are silently skipped — not every user has every dir.
  */
-function replaceInConfig(configPath: string): void {
-  if (!existsSync(configPath)) return;
-  try {
-    const content = readFileSync(configPath, "utf-8");
-    const updated = content
-      .replaceAll("easyclaw-tools", "rivonclaw-tools")
-      .replaceAll("easyclaw-policy", "rivonclaw-policy")
-      .replaceAll("easyclaw-event-bridge", "rivonclaw-event-bridge")
-      .replaceAll("easyclaw-file-permissions", "rivonclaw-file-permissions")
-      .replaceAll(".easyclaw", ".rivonclaw")
-      .replaceAll("EASYCLAW_", "RIVONCLAW_")
-      .replaceAll("EasyClaw", "RivonClaw");
-    if (updated !== content) {
-      writeFileSync(configPath, updated, "utf-8");
-      log.info(`Updated references in ${configPath}`);
+function copyUserData(oldDir: string, newDir: string): void {
+  for (const relPath of PATHS_TO_COPY) {
+    const src = join(oldDir, relPath);
+    if (!existsSync(src)) {
+      log.debug(`Skipping ${relPath} — does not exist`);
+      continue;
     }
-  } catch (err) {
-    log.warn(`Failed to update config at ${configPath}:`, err);
+
+    const dest = join(newDir, relPath);
+
+    try {
+      // Check if source is a directory (cpSync) or file (copyFileSync)
+      // by attempting cpSync with recursive — for a file this would fail,
+      // so we use a simple heuristic: known file entries vs directory entries.
+      if (relPath === "db.sqlite") {
+        mkdirSync(join(dest, ".."), { recursive: true });
+        copyFileSync(src, dest);
+      } else {
+        mkdirSync(dest, { recursive: true });
+        cpSync(src, dest, { recursive: true });
+      }
+      log.info(`Copied ${relPath}`);
+    } catch (err) {
+      log.warn(`Failed to copy ${relPath}:`, err);
+    }
   }
 }
 
