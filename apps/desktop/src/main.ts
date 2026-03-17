@@ -406,6 +406,19 @@ app.whenReady().then(async () => {
     process.env.OPENCLAW_STATE_DIR = stateDirOverride;
   }
 
+  // --- System Dependencies Provisioning ---
+  // On first launch, check and optionally install missing system dependencies
+  // (git, python, node, uv) that the agent needs to function properly.
+  // Runs in the background so the app starts immediately.
+  const depsProvisioned = storage.settings.get("deps_provisioned");
+  if (!depsProvisioned) {
+    import("./deps-provisioner/index.js").then(({ runDepsProvisioner }) => {
+      runDepsProvisioner({ storage }).catch((err: unknown) => {
+        log.error("Deps provisioner failed:", err);
+      });
+    });
+  }
+
   // --- Auto-updater state (updater instance created after tray) ---
   let currentState: GatewayState = "stopped";
   // updater is initialized after tray creation (search for "createAutoUpdater" below)
