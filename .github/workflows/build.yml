@@ -220,7 +220,7 @@ jobs:
 
           # Create the draft release with release notes and all artifacts
           gh release create "$TAG" \
-            --title "EasyClaw $TAG" \
+            --title "RivonClaw $TAG" \
             --notes-file .github/RELEASE_BODY.md \
             --draft \
             artifacts/windows/* \

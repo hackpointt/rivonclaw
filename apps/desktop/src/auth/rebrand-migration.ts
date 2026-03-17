@@ -2,12 +2,13 @@
 // have upgraded past the EasyClaw → RivonClaw rebrand. Also remove the hook
 // in main.ts (~line 300).
 
-import { homedir } from "node:os";
+import { homedir, hostname, userInfo } from "node:os";
 import { join } from "node:path";
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { platform } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createCipheriv, createDecipheriv, scryptSync, randomBytes } from "node:crypto";
 import { createLogger } from "@rivonclaw/logger";
 
 const execFileAsync = promisify(execFile);
@@ -69,9 +70,13 @@ export async function migrateFromEasyClaw(): Promise<void> {
     // Replace "easyclaw" references in the openclaw config file
     replaceInConfig(join(newDir, "openclaw", "openclaw.json"));
 
-    // Migrate macOS Keychain entries (macOS only)
+    // Migrate secrets
     if (platform() === "darwin") {
+      // macOS: keychain entries
       await migrateKeychainEntries();
+    } else {
+      // Windows/Linux: re-encrypt file-based secrets with new salt
+      reEncryptFileSecrets(join(newDir, "secrets"));
     }
 
     // Write marker so we don't re-run
@@ -106,6 +111,59 @@ function replaceInConfig(configPath: string): void {
     }
   } catch (err) {
     log.warn(`Failed to update config at ${configPath}:`, err);
+  }
+}
+
+/**
+ * Re-encrypt file-based secrets from the old "easyclaw" salt to the new "rivonclaw" salt.
+ * Used on Windows and Linux where secrets are AES-256-GCM encrypted files.
+ */
+function reEncryptFileSecrets(secretsDir: string): void {
+  if (!existsSync(secretsDir)) return;
+
+  const IV_LENGTH = 16;
+  const AUTH_TAG_LENGTH = 16;
+  const ALGORITHM = "aes-256-gcm" as const;
+
+  const user = userInfo().username;
+  const host = hostname();
+
+  const oldKey = scryptSync("easyclaw-" + host + "-" + user, "easyclaw-v0-salt", 32);
+  const newKey = scryptSync("rivonclaw-" + host + "-" + user, "rivonclaw-v0-salt", 32);
+
+  let files: string[];
+  try {
+    files = readdirSync(secretsDir).filter((f) => f.endsWith(".enc"));
+  } catch {
+    return;
+  }
+
+  if (files.length === 0) return;
+  log.info(`Re-encrypting ${files.length} secret file(s) with new salt`);
+
+  for (const file of files) {
+    const filePath = join(secretsDir, file);
+    try {
+      // Decrypt with old key
+      const data = readFileSync(filePath);
+      const iv = data.subarray(0, IV_LENGTH);
+      const authTag = data.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
+      const ciphertext = data.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
+      const decipher = createDecipheriv(ALGORITHM, oldKey, iv);
+      decipher.setAuthTag(authTag);
+      const plaintext = decipher.update(ciphertext) + decipher.final("utf8");
+
+      // Re-encrypt with new key
+      const newIv = randomBytes(IV_LENGTH);
+      const cipher = createCipheriv(ALGORITHM, newKey, newIv);
+      const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+      const newAuthTag = cipher.getAuthTag();
+      writeFileSync(filePath, Buffer.concat([newIv, newAuthTag, encrypted]));
+
+      log.info(`Re-encrypted secret: ${file}`);
+    } catch (err) {
+      log.warn(`Failed to re-encrypt secret "${file}":`, err);
+    }
   }
 }
 
