@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/LOGO_EN_COMPACT.png" width="400" alt="RivonClaw">
+  <img src="assets/LOGO_EN_COMPACT_CROPPED.png" width="400" alt="RivonClaw">
 </p>
 
 <p align="center">
