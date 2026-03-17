@@ -64,7 +64,6 @@ import { ManagedBrowserService } from "./browser-profiles/managed-browser-servic
 import { proxiedFetch } from "./api-routes/route-utils.js";
 import { buildToolContext } from "./utils/tool-context-builder.js";
 import { checkRuntimeReady, hydrateRuntime } from "./gateway/runtime-hydrator.js";
-import { createBootstrapWindow } from "./tray/bootstrap-window.js";
 
 const log = createLogger("desktop");
 
@@ -289,54 +288,36 @@ app.whenReady().then(async () => {
   // We explicitly show it for the main process here.
   app.dock?.show();
 
-  // Prevent Electron from quitting when the bootstrap window closes during
-  // hydration. The app is a tray app — it should stay alive even with zero
-  // windows until the tray is created and the full lifecycle is running.
+  // Tray app — stay alive even with zero windows.
   app.on("window-all-closed", () => { /* tray app — stay alive with zero windows */ });
 
-  // In packaged app, the runtime archive is extracted on first launch to a
-  // content-addressed directory under ~/.easyclaw/runtime/{hash}/. Subsequent
-  // launches skip extraction if the hash matches (fast path, ~1ms).
+  // In packaged app, the runtime lives inside an ASAR archive at
+  // {resourcesPath}/runtime-archive/openclaw-runtime.asar. Electron reads
+  // files directly from the ASAR — no extraction needed.
   // In dev, resolveVendorDir() resolves relative to source via import.meta.url.
   let vendorDir = "";
   if (app.isPackaged) {
     const archiveDir = join(process.resourcesPath, "runtime-archive");
-    const runtimeBaseDir = join(resolveEasyClawHome(), "runtime");
 
-    // Quick check — is the runtime already hydrated?
-    const existingRuntime = checkRuntimeReady(archiveDir, runtimeBaseDir);
+    // Quick check — is the ASAR present?
+    const existingRuntime = checkRuntimeReady(archiveDir);
 
     if (existingRuntime) {
       vendorDir = existingRuntime;
     } else {
-      // Need extraction — show bootstrap splash window
-      const bootstrap = createBootstrapWindow();
-      bootstrap.show();
-
-      let extracted = false;
-      while (!extracted) {
-        try {
-          const result = await hydrateRuntime({
-            archiveDir,
-            runtimeBaseDir,
-            onProgress: (p) => bootstrap.updateProgress(p),
-          });
-          vendorDir = result.runtimeDir;
-          extracted = true;
-          bootstrap.close();
-        } catch (err) {
-          log.error("Runtime hydration failed:", err);
-          const action = await bootstrap.showError(
-            err instanceof Error ? err.message : String(err),
-            true,
-          );
-          if (action !== "retry") {
-            bootstrap.close();
-            app.quit();
-            return;
-          }
-          // Loop continues — retry extraction
-        }
+      // ASAR missing — this shouldn't happen in a properly packaged build.
+      // Attempt hydrateRuntime which will produce a clear error message.
+      try {
+        const result = await hydrateRuntime({ archiveDir });
+        vendorDir = result.runtimeDir;
+      } catch (err) {
+        log.error("Runtime ASAR not found:", err);
+        dialog.showErrorBox(
+          "EasyClaw",
+          `Runtime archive is missing. Please reinstall the application.\n\n${err instanceof Error ? err.message : String(err)}`,
+        );
+        app.quit();
+        return;
       }
     }
   } else {

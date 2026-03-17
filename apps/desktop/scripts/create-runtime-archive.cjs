@@ -1,5 +1,5 @@
 // @ts-check
-// Creates a runtime archive (.tar.gz) from vendor/openclaw for inclusion in the
+// Creates a runtime archive (.asar) from vendor/openclaw for inclusion in the
 // Electron installer. All transformations happen on a temporary staging copy —
 // the canonical vendor/openclaw directory is NEVER modified.
 //
@@ -13,7 +13,7 @@
 //   6. Prune node_modules (EXTRA_REMOVE + keepSet + strip) — staging
 //   7. Smoke-test the bundled gateway — staging
 //   8. Generate V8 compile cache — staging
-//   9. Create tar.gz archive + runtime-manifest.json — staging -> output
+//   9. Create ASAR archive + runtime-manifest.json — staging -> output
 //  10. Clean up staging directory
 //
 // esbuild bundling is still necessary because:
@@ -24,7 +24,8 @@
 // - All bundling now operates on the staging copy, so vendor/ stays clean
 //
 // Produces:
-//   apps/desktop/runtime-archive/openclaw-runtime.tar.gz
+//   apps/desktop/runtime-archive/openclaw-runtime.asar
+//   apps/desktop/runtime-archive/openclaw-runtime.asar.unpacked/
 //   apps/desktop/runtime-archive/runtime-manifest.json
 
 const { execSync, execFileSync } = require("child_process");
@@ -48,7 +49,7 @@ const desktopDir = path.resolve(__dirname, "..");
 const extStagingDir = path.join(desktopDir, ".prebundled-extensions");
 
 const ARCHIVE_DIR = path.join(desktopDir, "runtime-archive");
-const ARCHIVE_FILE = "openclaw-runtime.tar.gz";
+const ARCHIVE_FILE = "openclaw-runtime.asar";
 
 // ─── Staging paths (set dynamically in createStagingDir) ───
 
@@ -1605,31 +1606,39 @@ async function createArchive() {
 
   // Pre-bundled extensions were already copied into staging/extensions/ before the smoke test.
 
-  // Create tar.gz archive using the npm `tar` package (pure JS).
-  // System tar (bsdtar) on Windows has known issues with junctions/symlinks
-  // that cause it to silently archive only a subset of files.
-  const tar = require("tar");
-  const excludeSet = new Set([".git", ".gitignore", ".gitattributes", ".turbo", ".bundled", ".bundle-keepset.json"]);
+  // Clean up files from staging that should not be packed into the ASAR.
+  // (.git is already excluded during staging copy, but these may still exist.)
+  const excludeNames = [".gitignore", ".gitattributes", ".turbo", ".bundled", ".bundle-keepset.json"];
+  const cleanStagingExcludes = (/** @type {string} */ dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (excludeNames.includes(entry.name)) {
+        fs.rmSync(full, { recursive: true, force: true });
+      } else if (entry.isDirectory() && entry.name !== "node_modules") {
+        cleanStagingExcludes(full);
+      }
+    }
+    // Also clean node_modules/.cache and .package-lock.json if present
+    if (path.basename(dir) === "node_modules") {
+      const cachePath = path.join(dir, ".cache");
+      if (fs.existsSync(cachePath)) fs.rmSync(cachePath, { recursive: true, force: true });
+      const pkgLock = path.join(dir, ".package-lock.json");
+      if (fs.existsSync(pkgLock)) fs.rmSync(pkgLock, { force: true });
+    }
+  };
+  cleanStagingExcludes(stagingDir);
+
+  // Create ASAR archive using @electron/asar.
+  // Native .node modules are unpacked so they can be dlopen'd at runtime.
+  const asar = require("@electron/asar");
 
   const t0 = Date.now();
   try {
-    await tar.create(
-      {
-        gzip: true,
-        file: archivePath,
-        cwd: path.dirname(stagingDir),
-        filter: (entryPath) => {
-          const base = path.basename(entryPath);
-          if (excludeSet.has(base)) return false;
-          if (entryPath.includes("node_modules/.cache")) return false;
-          if (entryPath.includes("node_modules/.package-lock.json")) return false;
-          return true;
-        },
-      },
-      [path.basename(stagingDir)],
-    );
+    await asar.createPackageWithOptions(stagingDir, archivePath, {
+      unpack: "{*.node,**/*.node}",
+    });
   } catch (err) {
-    console.error("[create-runtime-archive] tar.create failed:", /** @type {Error} */ (err).message);
+    console.error("[create-runtime-archive] asar.createPackageWithOptions failed:", /** @type {Error} */ (err).message);
     process.exit(1);
   }
   const elapsed = Date.now() - t0;

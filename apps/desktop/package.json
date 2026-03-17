@@ -41,7 +41,6 @@
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^12.6.2",
     "electron-updater": "^6.3.0",
-    "tar": "^7.5.11",
     "undici": "^7.21.0",
     "uuid": "^11.0.5",
     "ws": "^8.18.0"
