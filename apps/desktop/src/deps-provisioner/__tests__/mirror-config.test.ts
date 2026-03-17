@@ -72,15 +72,15 @@ function setupExecFile(
 // Hardcoded expected URLs — if someone changes a constant by mistake, this
 // test will catch the regression against the known-correct values.
 describe("mirror URL constants are correct", () => {
-  it("Homebrew USTC mirror URLs", () => {
-    expect(HOMEBREW_BREW_GIT_REMOTE).toBe("https://mirrors.ustc.edu.cn/brew.git");
-    expect(HOMEBREW_CORE_GIT_REMOTE).toBe("https://mirrors.ustc.edu.cn/homebrew-core.git");
-    expect(HOMEBREW_BOTTLE_DOMAIN).toBe("https://mirrors.ustc.edu.cn/homebrew-bottles");
-    expect(HOMEBREW_API_DOMAIN).toBe("https://mirrors.ustc.edu.cn/homebrew-bottles/api");
+  it("Homebrew Aliyun mirror URLs", () => {
+    expect(HOMEBREW_BREW_GIT_REMOTE).toBe("https://mirrors.aliyun.com/homebrew/brew.git");
+    expect(HOMEBREW_CORE_GIT_REMOTE).toBe("https://mirrors.aliyun.com/homebrew/homebrew-core.git");
+    expect(HOMEBREW_BOTTLE_DOMAIN).toBe("https://mirrors.aliyun.com/homebrew/homebrew-bottles");
+    expect(HOMEBREW_API_DOMAIN).toBe("https://mirrors.aliyun.com/homebrew/homebrew-bottles/api");
   });
 
-  it("Tsinghua PyPI mirror URL", () => {
-    expect(PYPI_MIRROR_URL).toBe("https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple");
+  it("Aliyun PyPI mirror URL", () => {
+    expect(PYPI_MIRROR_URL).toBe("https://mirrors.aliyun.com/pypi/simple");
   });
 
   it("npmmirror registry URL", () => {
@@ -93,10 +93,10 @@ describe("getMirrorEnv", () => {
     const env = getMirrorEnv("cn");
 
     expect(env).not.toBeNull();
-    expect(env!.HOMEBREW_BREW_GIT_REMOTE).toBe("https://mirrors.ustc.edu.cn/brew.git");
-    expect(env!.HOMEBREW_CORE_GIT_REMOTE).toBe("https://mirrors.ustc.edu.cn/homebrew-core.git");
-    expect(env!.HOMEBREW_BOTTLE_DOMAIN).toBe("https://mirrors.ustc.edu.cn/homebrew-bottles");
-    expect(env!.HOMEBREW_API_DOMAIN).toBe("https://mirrors.ustc.edu.cn/homebrew-bottles/api");
+    expect(env!.HOMEBREW_BREW_GIT_REMOTE).toBe("https://mirrors.aliyun.com/homebrew/brew.git");
+    expect(env!.HOMEBREW_CORE_GIT_REMOTE).toBe("https://mirrors.aliyun.com/homebrew/homebrew-core.git");
+    expect(env!.HOMEBREW_BOTTLE_DOMAIN).toBe("https://mirrors.aliyun.com/homebrew/homebrew-bottles");
+    expect(env!.HOMEBREW_API_DOMAIN).toBe("https://mirrors.aliyun.com/homebrew/homebrew-bottles/api");
   });
 
   it('returns null for "global" region', () => {
@@ -143,7 +143,7 @@ describe("configureMirrors", () => {
     );
     expect(mockWriteFileSyncFn).toHaveBeenCalledWith(
       "/Users/testuser/.pip/pip.conf",
-      expect.stringContaining("https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"),
+      expect.stringContaining("https://mirrors.aliyun.com/pypi/simple"),
       "utf-8",
     );
   });

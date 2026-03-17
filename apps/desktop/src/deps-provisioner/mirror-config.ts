@@ -14,16 +14,16 @@ const execFile = promisify(execFileCb);
 // ---------------------------------------------------------------------------
 
 export const HOMEBREW_BREW_GIT_REMOTE =
-  "https://mirrors.ustc.edu.cn/brew.git";
+  "https://mirrors.aliyun.com/homebrew/brew.git";
 export const HOMEBREW_CORE_GIT_REMOTE =
-  "https://mirrors.ustc.edu.cn/homebrew-core.git";
+  "https://mirrors.aliyun.com/homebrew/homebrew-core.git";
 export const HOMEBREW_BOTTLE_DOMAIN =
-  "https://mirrors.ustc.edu.cn/homebrew-bottles";
+  "https://mirrors.aliyun.com/homebrew/homebrew-bottles";
 export const HOMEBREW_API_DOMAIN =
-  "https://mirrors.ustc.edu.cn/homebrew-bottles/api";
+  "https://mirrors.aliyun.com/homebrew/homebrew-bottles/api";
 
 export const PYPI_MIRROR_URL =
-  "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple";
+  "https://mirrors.aliyun.com/pypi/simple";
 export const NPM_MIRROR_URL =
   "https://registry.npmmirror.com";
 

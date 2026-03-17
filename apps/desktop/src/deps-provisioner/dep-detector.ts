@@ -89,6 +89,13 @@ async function checkDep(
         env,
       });
       const combined = stdout + stderr;
+
+      // Windows ships a "python" stub that opens the Microsoft Store
+      // instead of running Python. Reject it so we install a real one.
+      if (check.name === "python" && platform() === "win32" && !combined.match(/Python \d/)) {
+        continue;
+      }
+
       const version = check.parseVersion(combined);
 
       // Resolve the binary path via `which` (Unix) or `where.exe` (Windows).
