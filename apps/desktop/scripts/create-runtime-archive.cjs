@@ -1582,7 +1582,7 @@ function generateCompileCache() {
 
 // ─── Phase 6: Create archive ───
 
-function createArchive() {
+async function createArchive() {
   log("Creating runtime archive...");
 
   // Ensure output dir exists
@@ -1605,36 +1605,38 @@ function createArchive() {
 
   // Pre-bundled extensions were already copied into staging/extensions/ before the smoke test.
 
-  // Build tar exclusion list
-  const excludes = [
-    "--exclude=.git",
-    "--exclude=.gitignore",
-    "--exclude=.gitattributes",
-    "--exclude=node_modules/.cache",
-    "--exclude=node_modules/.package-lock.json",
-    "--exclude=.turbo",
-    "--exclude=.bundled",
-    "--exclude=.bundle-keepset.json",
-  ];
-
-  // Create tar.gz archive from the staging directory.
-  // Use -C to cd into the staging parent so the archive root is "openclaw/"
-  // On Windows, convert backslashes to forward slashes for tar compatibility.
-  const toSlash = (p) => p.replace(/\\/g, "/");
-  const tarCmd = [
-    "tar", "czf", toSlash(archivePath),
-    ...excludes,
-    "-C", toSlash(path.dirname(stagingDir)),
-    path.basename(stagingDir),
-  ].join(" ");
+  // Create tar.gz archive using tar-fs (pure JS streaming implementation).
+  // Windows bsdtar silently skips files with paths >= 260 chars (MAX_PATH),
+  // producing incomplete archives. tar-fs uses Node.js streams with no
+  // MAX_PATH limitation and works identically on all platforms.
+  const tarFs = require("tar-fs");
+  const zlib = require("zlib");
+  const excludeNames = new Set([".git", ".gitignore", ".gitattributes", ".turbo", ".bundled", ".bundle-keepset.json"]);
 
   const t0 = Date.now();
-  try {
-    execSync(tarCmd, { stdio: "inherit", timeout: 600_000 });
-  } catch (err) {
-    console.error("[create-runtime-archive] tar command failed:", /** @type {Error} */ (err).message);
-    process.exit(1);
-  }
+  await new Promise((resolve, reject) => {
+    const pack = tarFs.pack(stagingDir, {
+      map(header) {
+        // Prepend "openclaw/" so the archive root matches the old tar -C behavior
+        header.name = path.basename(stagingDir) + "/" + header.name;
+        return header;
+      },
+      ignore(name) {
+        const base = path.basename(name);
+        if (excludeNames.has(base)) return true;
+        if (name.endsWith(`node_modules${path.sep}.cache`) || name.includes(`node_modules${path.sep}.cache${path.sep}`)) return true;
+        if (base === ".package-lock.json" && name.includes("node_modules")) return true;
+        return false;
+      },
+    });
+    const gzip = zlib.createGzip({ level: 6 });
+    const output = fs.createWriteStream(archivePath);
+    pack.on("error", reject);
+    gzip.on("error", reject);
+    output.on("error", reject);
+    output.on("finish", resolve);
+    pack.pipe(gzip).pipe(output);
+  });
   const elapsed = Date.now() - t0;
 
   // Compute SHA-256 of the archive
@@ -1665,15 +1667,6 @@ function createArchive() {
 (async () => {
   const t0 = Date.now();
 
-  // Skip if runtime archive already exists (e.g. downloaded from CI artifact)
-  const existingArchive = path.join(ARCHIVE_DIR, ARCHIVE_FILE);
-  const existingManifest = path.join(ARCHIVE_DIR, MANIFEST_FILENAME);
-  if (fs.existsSync(existingArchive) && fs.existsSync(existingManifest)) {
-    console.log("[create-runtime-archive] Runtime archive already exists, skipping.");
-    console.log(`  Archive: ${existingArchive}`);
-    console.log(`  Manifest: ${existingManifest}`);
-    process.exit(0);
-  }
 
   // Guards — validate the read-only vendor directory
   if (!fs.existsSync(vendorDir)) {
@@ -1747,7 +1740,7 @@ function createArchive() {
     generateCompileCache();
 
     // Phase 6: Create the archive (from staging)
-    const manifest = createArchive();
+    const manifest = await createArchive();
 
     const totalElapsed = ((Date.now() - t0) / 1000).toFixed(1);
     log(`Done in ${totalElapsed}s. Archive: ${ARCHIVE_FILE} (${fmtSize(fs.statSync(path.join(ARCHIVE_DIR, ARCHIVE_FILE)).size)}), version ${manifest.version}`);
