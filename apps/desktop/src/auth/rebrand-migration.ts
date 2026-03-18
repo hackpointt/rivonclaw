@@ -4,7 +4,7 @@
 
 import { homedir, hostname, userInfo } from "node:os";
 import { join } from "node:path";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { platform } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -94,13 +94,9 @@ export async function migrateFromEasyClaw(): Promise<void> {
     writeFileSync(marker, new Date().toISOString(), "utf-8");
     log.info("Rebrand migration complete");
 
-    // Best-effort cleanup of old directory
-    try {
-      rmSync(oldDir, { recursive: true, force: true });
-      log.info("Removed old ~/.easyclaw");
-    } catch (cleanupErr) {
-      log.warn("Could not remove old ~/.easyclaw (Windows file locks?):", cleanupErr);
-    }
+    // Keep ~/.easyclaw as a backup — users can delete it manually once
+    // they've confirmed everything works in ~/.rivonclaw.
+    log.info("Old ~/.easyclaw directory preserved as backup");
   } catch (err) {
     log.error("Rebrand migration failed (app will continue):", err);
   }
