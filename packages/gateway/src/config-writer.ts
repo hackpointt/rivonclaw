@@ -126,6 +126,7 @@ function fixSemanticErrors(config: Record<string, unknown>): string[] {
 /** Plugin IDs that have been permanently removed from the project. */
 const REMOVED_PLUGIN_IDS = new Set(["wecom", "dingtalk"]);
 
+// TODO(cleanup): Remove after v1.8.0 — by then all users will have upgraded past the rebrand.
 /** Plugin IDs renamed during the EasyClaw → RivonClaw rebrand.
  *  Old names are replaced with new names in plugins.allow on every config write. */
 const RENAMED_PLUGIN_IDS: Record<string, string> = {
