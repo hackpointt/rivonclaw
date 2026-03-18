@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.7.1",
+    "date": "2026-03-17",
+    "en": [
+      "Fix rebrand migration missing agents directory for session history"
+    ],
+    "zh": [
+      "修复品牌迁移时遗漏 agents 目录导致会话历史丢失的问题"
+    ]
+  },
+  {
     "version": "1.7.0",
     "date": "2026-03-17",
     "en": [
