@@ -789,6 +789,7 @@
 .chat-tool-event-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -803,6 +804,7 @@
   padding-left: 17px; /* align with text after icon */
 }
 
+
 .chat-tool-args-toggle {
   display: inline-flex;
   align-items: center;
@@ -813,6 +815,9 @@
   background: none;
   color: var(--color-text-muted);
   font-size: 11px;
+  line-height: 1;
+  position: relative;
+  top: 1px;
   font-family: var(--font-sans);
   cursor: pointer;
   transition: color var(--transition-fast), background-color var(--transition-fast);
@@ -846,15 +851,13 @@
   max-width: 500px;
   white-space: pre-wrap;
   word-break: break-all;
+  flex-basis: 100%;
 }
 
-.chat-tool-args-code-inline {
-  /* Inline preview: more compact */
-  padding: 3px 6px;
-  white-space: pre;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-height: 1.5em;
+.chat-tool-args-inline .chat-tool-args-code {
+  /* When inline, expanded code takes full row width */
+  flex-basis: 100%;
+}
 }
 
 .chat-thinking-dots {

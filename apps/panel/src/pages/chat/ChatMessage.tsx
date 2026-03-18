@@ -108,25 +108,17 @@ function CodeBlockCopyButton({ text }: { text: string }) {
   );
 }
 
-/** Maximum characters to show in the collapsed tool args preview. */
-const TOOL_ARGS_PREVIEW_CHARS = 120;
-
 /**
  * Collapsible display for tool call arguments.
- * Shows a compact preview when collapsed, full formatted JSON when expanded.
+ * Toggle button renders inline in the header; expanded JSON renders below.
  */
 export function ToolArgsDisplay({ args }: { args: Record<string, unknown> }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const formatted = JSON.stringify(args, null, 2);
-  const needsCollapse = formatted.length > TOOL_ARGS_PREVIEW_CHARS;
-
-  const preview = needsCollapse
-    ? formatted.slice(0, TOOL_ARGS_PREVIEW_CHARS) + "..."
-    : formatted;
 
   return (
-    <div className="chat-tool-args">
+    <>
       <button
         className={`chat-tool-args-toggle${expanded ? " chat-tool-args-toggle-expanded" : ""}`}
         onClick={() => setExpanded((v) => !v)}
@@ -134,12 +126,10 @@ export function ToolArgsDisplay({ args }: { args: Record<string, unknown> }) {
         <svg className="chat-tool-args-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 6 15 12 9 18" /></svg>
         <span>{t("chat.toolArgsLabel", "Parameters")}</span>
       </button>
-      {expanded ? (
+      {expanded && (
         <pre className="chat-tool-args-code">{formatted}</pre>
-      ) : needsCollapse ? null : (
-        <pre className="chat-tool-args-code chat-tool-args-code-inline">{preview}</pre>
       )}
-    </div>
+    </>
   );
 }
 

@@ -1067,10 +1067,10 @@ export function ChatPage({ onAgentNameChange }: { onAgentNameChange?: (name: str
                   <div className="chat-tool-event-header">
                     <span className="chat-tool-event-icon">&#9881;</span>
                     {t("chat.toolEventLabel", { tool: msg.toolName })}
+                    {msg.toolArgs && Object.keys(msg.toolArgs).length > 0 && (
+                      <ToolArgsDisplay args={msg.toolArgs} />
+                    )}
                   </div>
-                  {msg.toolArgs && Object.keys(msg.toolArgs).length > 0 && (
-                    <ToolArgsDisplay args={msg.toolArgs} />
-                  )}
                 </div>
               ) : null;
             }
