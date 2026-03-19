@@ -1,0 +1,29 @@
+{
+  "name": "@rivonclaw/rivonclaw-search-browser-fallback",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.mjs"
+    ]
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "echo 'no tests'"
+  },
+  "dependencies": {
+    "@rivonclaw/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "tsdown": "^0.20.3"
+  }
+}

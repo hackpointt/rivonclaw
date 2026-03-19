@@ -1,7 +1,7 @@
 /** @deprecated Replaced by KeyUsagePage. Kept for reference only. */
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { CNY_USD } from "@rivonclaw/core";
+import { CNY_USD, DEFAULTS } from "@rivonclaw/core";
 import { fetchUsage, type UsageSummary } from "../api/index.js";
 
 type TimeRange = "7d" | "30d" | "all";
@@ -37,7 +37,7 @@ export function UsagePage() {
   useEffect(() => {
     const interval = setInterval(() => {
       loadUsage();
-    }, 60_000); // 60 seconds
+    }, DEFAULTS.polling.usageRefreshMs);
 
     return () => clearInterval(interval);
   }, [timeRange]);

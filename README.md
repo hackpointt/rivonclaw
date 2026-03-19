@@ -88,8 +88,8 @@ rivonclaw/
 ├── extensions/
 │   ├── rivonclaw-policy/      # OpenClaw plugin shell for policy injection
 │   ├── rivonclaw-tools/       # Owner-only custom tools plugin
-│   ├── file-permissions/     # OpenClaw plugin for file access control
-│   └── mobile-chat-channel/  # Mobile messaging relay plugin
+│   ├── rivonclaw-file-permissions/  # OpenClaw plugin for file access control
+│   └── rivonclaw-mobile-chat-channel/  # Mobile messaging relay plugin
 ├── scripts/
 │   ├── test-local.sh             # Local test pipeline (build + unit + e2e tests)
 │   ├── publish-release.sh        # Publish draft GitHub Release
@@ -116,7 +116,7 @@ The monorepo uses pnpm workspaces (`apps/*`, `packages/*`, `extensions/*`) with 
 | `@rivonclaw/rivonclaw-policy`      | Thin OpenClaw plugin shell that wires policy injection into the gateway's `before_agent_start` hook.                     |
 | `@rivonclaw/rivonclaw-tools`       | Owner-only custom tools plugin (e.g. system control, desktop integration).                                              |
 | `@rivonclaw/file-permissions`     | OpenClaw plugin that enforces file access permissions by intercepting and validating tool calls before execution.        |
-| `@rivonclaw/mobile-chat-channel`  | Mobile PWA messaging relay — bridges mobile chat clients to the gateway via WebSocket.                                  |
+| `@rivonclaw/rivonclaw-mobile-chat-channel`  | Mobile PWA messaging relay — bridges mobile chat clients to the gateway via WebSocket.                                  |
 
 ### Packages
 

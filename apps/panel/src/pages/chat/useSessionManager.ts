@@ -2,14 +2,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { GatewayChatClient } from "../../lib/gateway-client.js";
 import type { SessionTabInfo, SessionChatState, SessionsListResult } from "./chat-utils.js";
 import { DEFAULT_SESSION_KEY, INITIAL_VISIBLE, FETCH_BATCH, parseRawMessages } from "./chat-utils.js";
+import { DEFAULTS } from "@rivonclaw/core";
 import { restoreImages } from "../../lib/image-cache.js";
 import { fetchChatSessions, updateChatSession } from "../../api/chat-sessions.js";
 import type { ChatSessionMeta } from "../../api/chat-sessions.js";
 import { trackEvent } from "../../api/index.js";
-import { ensureToolContext } from "../../api/tool-registry.js";
 
-const REFRESH_DEBOUNCE = 2000;
-const MAX_CACHED_SESSIONS = 20;
+const REFRESH_DEBOUNCE = DEFAULTS.chat.sessionRefreshDebounceMs;
+const MAX_CACHED_SESSIONS = DEFAULTS.chat.maxCachedSessions;
 
 /** Strip RivonClaw prependContext blocks from a derived title. */
 const PREPEND_CONTEXT_RE = /---\s+RivonClaw[\s\S]*?---\s+End\s+\w[\w\s]*---/g;
@@ -221,7 +221,7 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
     if (!connected) return;
     cancelledRef.current = false;
     fetchSessionsListRef.current();
-    ensureToolContext("chat_session", activeKeyRef.current).catch(err => console.warn("ensureToolContext failed:", err));
+    // Tool context is now pushed automatically by Desktop when gateway fires session_start
     return () => {
       cancelledRef.current = true;
       clearTimeout(refreshTimerRef.current);
@@ -302,8 +302,7 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
       return next;
     });
 
-    // Ensure tool context is pushed for the newly active session
-    ensureToolContext("chat_session", key).catch(err => console.warn("ensureToolContext failed:", err));
+    // Tool context is now pushed automatically by Desktop when gateway fires session_start
   }, [clientRef]);
 
   const createNewChat = useCallback(async () => {
@@ -348,8 +347,7 @@ export function useSessionManager(opts: UseSessionManagerOptions): UseSessionMan
       return next;
     });
 
-    // Ensure tool context is pushed for the new session
-    ensureToolContext("chat_session", newKey).catch(err => console.warn("ensureToolContext failed:", err));
+    // Tool context is now pushed automatically by Desktop when gateway fires session_start
   }, []);
 
   const archiveSession = useCallback(async (key: string) => {

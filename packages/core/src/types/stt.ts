@@ -1,3 +1,5 @@
+import { DEFAULTS } from "../defaults.js";
+
 /**
  * STT (Speech-to-Text) provider types
  */
@@ -17,8 +19,8 @@ export interface SttSettings {
  * Default STT settings
  */
 export const DEFAULT_STT_SETTINGS: SttSettings = {
-  provider: "groq",
-  enabled: false,
+  provider: DEFAULTS.stt.defaultProvider,
+  enabled: DEFAULTS.stt.defaultEnabled,
 };
 
 /**

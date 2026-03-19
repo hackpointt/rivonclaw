@@ -8,20 +8,22 @@ describe("rivonclaw-tools plugin", () => {
     expect(typeof plugin.activate).toBe("function");
   });
 
-  it("registers before_prompt_build hook and tool on activate", () => {
+  it("registers before_prompt_build hook and no tools on activate", () => {
     const hooks: string[] = [];
-    const tools: unknown[] = [];
+    const toolsRegistered: unknown[] = [];
 
     const mockApi = {
-      logger: { info: () => {} },
+      id: "rivonclaw-tools",
+      logger: { info: () => {}, warn: () => {} },
       on(event: string) { hooks.push(event); },
-      registerTool(factory: unknown) { tools.push(factory); },
+      registerTool(factory: unknown) { toolsRegistered.push(factory); },
     };
 
     plugin.activate(mockApi);
 
     expect(hooks).toContain("before_prompt_build");
     expect(hooks).not.toContain("before_agent_start");
-    expect(tools).toHaveLength(2);
+    expect(hooks).toHaveLength(1);
+    expect(toolsRegistered).toHaveLength(0);
   });
 });

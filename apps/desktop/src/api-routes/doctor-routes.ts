@@ -1,13 +1,14 @@
 import { spawn, execSync } from "node:child_process";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
+import { DEFAULTS } from "@rivonclaw/core";
 import { createLogger } from "@rivonclaw/logger";
 import { resolveOpenClawStateDir, resolveOpenClawConfigPath } from "@rivonclaw/core/node";
 import type { RouteHandler } from "./api-context.js";
 
 const log = createLogger("doctor");
 
-const DOCTOR_TIMEOUT_MS = 60_000;
+const DOCTOR_TIMEOUT_MS = DEFAULTS.desktop.doctorTimeoutMs;
 const isWindows = process.platform === "win32";
 
 let doctorRunning = false;

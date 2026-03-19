@@ -1,5 +1,5 @@
 import { createLogger } from "@rivonclaw/logger";
-import type { SttProvider as SttProviderType } from "@rivonclaw/core";
+import { DEFAULTS, type SttProvider as SttProviderType } from "@rivonclaw/core";
 
 const log = createLogger("gateway:audio-config");
 
@@ -75,8 +75,8 @@ export function generateAudioConfig(
   return {
     enabled: true,
     models,
-    maxBytes: 25 * 1024 * 1024, // 25MB limit
-    timeoutSeconds: 300, // 5 minutes (volcengine uses async submit+poll)
+    maxBytes: DEFAULTS.gatewayConfig.audioMaxBytes,
+    timeoutSeconds: DEFAULTS.gatewayConfig.audioTimeoutSeconds,
     scope: {
       default: "allow",
     },

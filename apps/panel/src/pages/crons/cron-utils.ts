@@ -1,3 +1,5 @@
+import { DEFAULTS } from "@rivonclaw/core";
+
 // ── Type definitions ──
 // Mirror the subset of OpenClaw cron types needed by the panel UI.
 // We re-declare them here to avoid importing from vendor/ (which may not
@@ -162,8 +164,8 @@ export function defaultFormData(): CronJobFormData {
     scheduleKind: "cron",
     cronExpr: "",
     cronTz: "",
-    everyValue: 60,
-    everyUnit: "minutes",
+    everyValue: DEFAULTS.cron.defaultIntervalValue,
+    everyUnit: DEFAULTS.cron.defaultIntervalUnit,
     atDatetime: "",
     payloadKind: "agentTurn",
     message: "",

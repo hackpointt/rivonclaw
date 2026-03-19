@@ -1,3 +1,5 @@
+import { DEFAULTS } from "../defaults.js";
+
 export type BrowserProfileId = string;
 
 export type BrowserProfileStatus = "active" | "disabled" | "archived";
@@ -59,11 +61,6 @@ export interface BrowserProfilesCapabilityBinding {
   allowDynamicDiscovery: boolean;
   visibleTags?: string[];
   namePrefixes?: string[];
-}
-
-export interface AgentRunCapabilityContext {
-  browserProfiles?: BrowserProfilesCapabilityBinding;
-  entitlementSnapshot?: Record<string, boolean>;
 }
 
 export interface BrowserProfilesFilterInput {
@@ -203,8 +200,8 @@ export interface BrowserProfileRuntimeStateSummary {
  * Note: restore-on-launch is implicit when mode != "off" — no separate flag needed.
  */
 export const DEFAULT_SESSION_STATE_POLICY: BrowserProfileSessionStatePolicy = {
-  mode: "cookies_only",
-  storage: "local",
-  checkpointIntervalSec: 60,
+  mode: DEFAULTS.browserProfiles.defaultSessionStateMode,
+  storage: DEFAULTS.browserProfiles.defaultSessionStateStorage,
+  checkpointIntervalSec: DEFAULTS.browserProfiles.defaultCheckpointIntervalSec,
 };
 

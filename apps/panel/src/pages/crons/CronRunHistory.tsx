@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Modal } from "../../components/modals/Modal.js";
 import type { CronRunLogEntry, CronRunsResult } from "./cron-utils.js";
 import { formatDuration } from "./cron-utils.js";
+import { DEFAULTS } from "@rivonclaw/core";
 
 interface CronRunHistoryProps {
   jobId: string;
@@ -11,7 +12,7 @@ interface CronRunHistoryProps {
   onClose: () => void;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = DEFAULTS.pagination.cronHistory;
 
 export function CronRunHistory({ jobId, jobName, fetchRuns, onClose }: CronRunHistoryProps) {
   const { t } = useTranslation();

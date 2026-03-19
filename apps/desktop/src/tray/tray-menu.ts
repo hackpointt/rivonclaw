@@ -38,7 +38,7 @@ const LABELS: Record<string, TrayLabels> = {
     restartGateway: "重启网关",
     checkForUpdates: "检查更新",
     updateAvailable: "有新版本: v{{version}}",
-    quit: "退出 RivonClaw",
+    quit: "退出爪爪",
   },
 };
 

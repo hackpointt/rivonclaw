@@ -80,4 +80,8 @@ vendor upgrade, the AI must still inspect whether each patch:
 
 - `0001-vendor-openclaw-add-browser-lifecycle-hooks-for-plug.patch`
   - adds browser lifecycle hooks required by
-    `extensions/browser-profiles-tools/`
+    `extensions/rivonclaw-browser-profiles-tools/`
+- `0002-vendor-openclaw-add-before-tool-resolve-hook-for-per.patch`
+  - adds `before_tool_resolve` hook for per-session tool filtering (ADR-031)
+  - used by `extensions/rivonclaw-capability-manager/` to control which
+    tools are visible to the LLM based on effectiveTools

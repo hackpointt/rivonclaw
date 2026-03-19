@@ -1,4 +1,5 @@
 import { formatError } from "@rivonclaw/core";
+import { brandName } from "../i18n/brand.js";
 import { createLogger } from "@rivonclaw/logger";
 import { app, Notification, shell } from "electron";
 import type { BrowserWindow } from "electron";
@@ -127,7 +128,7 @@ export function createAutoUpdater(deps: AutoUpdaterDeps) {
     });
     const isZh = deps.systemLocale === "zh";
     const notification = new Notification({
-      title: isZh ? "RivonClaw 有新版本" : "RivonClaw Update Available",
+      title: isZh ? `${brandName("zh")} 有新版本` : `${brandName("en")} Update Available`,
       body: isZh
         ? `新版本 v${info.version} 已发布，点击查看详情。`
         : `A new version v${info.version} is available. Click to download.`,
@@ -212,7 +213,7 @@ export function createAutoUpdater(deps: AutoUpdaterDeps) {
       shell.openExternal(downloadUrl);
       const isZh = deps.systemLocale === "zh";
       new Notification({
-        title: isZh ? "RivonClaw 更新" : "RivonClaw Update",
+        title: isZh ? `${brandName("zh")} 更新` : `${brandName("en")} Update`,
         body: isZh
           ? "已在浏览器中打开下载链接，下载完成后请手动安装。"
           : "Download opened in browser. Install the DMG after downloading.",
@@ -275,7 +276,7 @@ export function createAutoUpdater(deps: AutoUpdaterDeps) {
 
     const isZh = deps.systemLocale === "zh";
     new Notification({
-      title: isZh ? "RivonClaw 正在更新" : "RivonClaw Updating",
+      title: isZh ? `${brandName("zh")} 正在更新` : `${brandName("en")} Updating`,
       body: isZh
         ? "安装程序正在运行，完成后将自动启动。请勿手动打开应用。"
         : "The installer is running. The app will restart automatically.",

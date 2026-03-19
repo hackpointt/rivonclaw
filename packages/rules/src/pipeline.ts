@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import { DEFAULTS } from "@rivonclaw/core";
 import type { Rule, RuleArtifact } from "@rivonclaw/core";
 import type { Storage } from "@rivonclaw/storage";
 import { createLogger } from "@rivonclaw/logger";
@@ -29,9 +30,9 @@ export interface ArtifactPipelineOptions {
   retryBaseDelayMs?: number;
 }
 
-const DEFAULT_MAX_POLICY_LENGTH = 4000;
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_RETRY_BASE_DELAY_MS = 1000;
+const DEFAULT_MAX_POLICY_LENGTH = DEFAULTS.rules.maxPolicyLength;
+const DEFAULT_MAX_RETRIES = DEFAULTS.rules.maxRetries;
+const DEFAULT_RETRY_BASE_DELAY_MS = DEFAULTS.rules.retryBaseDelayMs;
 
 export class ArtifactPipeline extends EventEmitter<ArtifactPipelineEvents> {
   private storage: Storage;

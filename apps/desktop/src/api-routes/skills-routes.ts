@@ -59,7 +59,7 @@ export const handleSkillsRoutes: RouteHandler = async (req, res, url, pathname, 
 
         skills.push({
           slug: entry,
-          name: installMeta.name || fmMeta.name,
+          name: installMeta.name || fmMeta.name || entry,
           description: installMeta.description || fmMeta.description,
           author: installMeta.author || fmMeta.author,
           version: installMeta.version || fmMeta.version,

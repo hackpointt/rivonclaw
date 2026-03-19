@@ -1,3 +1,5 @@
+import { DEFAULTS } from "./defaults.js";
+
 /** Supported LLM providers (cloud APIs, subscriptions, and local servers). */
 export type LLMProvider =
   | "openai"
@@ -140,7 +142,7 @@ export interface ResolvedProviderMeta {
 }
 
 // CNY → USD conversion rate used for cost estimates below.
-export const CNY_USD = 7.0;
+export const CNY_USD = DEFAULTS.currency.cnyUsd;
 const cny = (yuan: number) => Math.round((yuan / CNY_USD) * 100) / 100;
 const FREE_COST: ModelCost = {
   input: 0,

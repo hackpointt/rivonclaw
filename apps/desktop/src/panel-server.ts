@@ -34,6 +34,7 @@ import { handleBrowserProfilesRoutes } from "./api-routes/browser-profiles-route
 import { handleAuthRoutes } from "./api-routes/auth-routes.js";
 import { handleCloudGraphqlRoutes } from "./api-routes/cloud-graphql-routes.js";
 import { handleDoctorRoutes } from "./api-routes/doctor-routes.js";
+import { handleDepsRoutes } from "./api-routes/deps-routes.js";
 import { handleToolRegistryRoutes } from "./api-routes/tool-registry-routes.js";
 
 const log = createLogger("panel-server");
@@ -198,6 +199,7 @@ export interface PanelServerOptions {
   onSttChange?: () => void;
   onExtrasChange?: () => void;
   onPermissionsChange?: () => void;
+  onToolSelectionChange?: (effectiveToolIds: string[]) => void;
   onBrowserChange?: () => void;
   onAutoLaunchChange?: (enabled: boolean) => void;
   onAuthChange?: () => void;
@@ -247,6 +249,7 @@ const routeHandlers: RouteHandler[] = [
   handleBrowserProfilesRoutes,
   handleToolRegistryRoutes,
   handleDoctorRoutes,
+  handleDepsRoutes,
 ];
 
 /**
@@ -256,7 +259,7 @@ const routeHandlers: RouteHandler[] = [
 export function startPanelServer(options: PanelServerOptions): Server {
   const port = options.port ?? resolvePanelPort();
   const distDir = resolve(options.panelDistDir);
-  const { storage, secretStore, getRpcClient, onRuleChange, onProviderChange, onOpenFileDialog, sttManager, onSttChange, onExtrasChange, onPermissionsChange, onBrowserChange, onAutoLaunchChange, onAuthChange, onChannelConfigured, onOAuthFlow, onOAuthAcquire, onOAuthSave, onOAuthManualComplete, onOAuthPoll, onTelemetryTrack, vendorDir, nodeBin, deviceId, getUpdateResult, getGatewayInfo, changelogPath, onUpdateDownload, onUpdateCancel, onUpdateInstall, getUpdateDownloadState, authSession, sessionLifecycleManager, managedBrowserService } = options;
+  const { storage, secretStore, getRpcClient, onRuleChange, onProviderChange, onOpenFileDialog, sttManager, onSttChange, onExtrasChange, onPermissionsChange, onToolSelectionChange, onBrowserChange, onAutoLaunchChange, onAuthChange, onChannelConfigured, onOAuthFlow, onOAuthAcquire, onOAuthSave, onOAuthManualComplete, onOAuthPoll, onTelemetryTrack, vendorDir, nodeBin, deviceId, getUpdateResult, getGatewayInfo, changelogPath, onUpdateDownload, onUpdateCancel, onUpdateInstall, getUpdateDownloadState, authSession, sessionLifecycleManager, managedBrowserService } = options;
 
   // Initialize the customer service bridge
   initCSBridge({ storage, secretStore, getGatewayInfo, deviceId });
@@ -330,7 +333,7 @@ export function startPanelServer(options: PanelServerOptions): Server {
   // Build the ApiContext object passed to all route handlers
   const ctx: ApiContext = {
     storage, secretStore, getRpcClient, onRuleChange, onProviderChange, onOpenFileDialog,
-    sttManager, onSttChange, onExtrasChange, onPermissionsChange, onBrowserChange, onAutoLaunchChange, onAuthChange,
+    sttManager, onSttChange, onExtrasChange, onPermissionsChange, onToolSelectionChange, onBrowserChange, onAutoLaunchChange, onAuthChange,
     onChannelConfigured, onOAuthFlow, onOAuthAcquire, onOAuthSave, onOAuthManualComplete, onOAuthPoll,
     onTelemetryTrack, vendorDir, nodeBin, deviceId, getUpdateResult, getGatewayInfo,
     snapshotEngine, queryService, mobileManager, authSession, sessionLifecycleManager,

@@ -1,3 +1,4 @@
+import { DEFAULTS } from "@rivonclaw/core";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { RouteHandler } from "./api-context.js";
@@ -218,7 +219,7 @@ export const handleBrowserProfilesRoutes: RouteHandler = async (req, res, _url, 
   const policyMatch = pathname.match(/^\/api\/browser-profiles\/([^/]+)\/session-policy$/);
   if (policyMatch) {
     const profileId = decodeURIComponent(policyMatch[1]);
-    const defaultPolicy = { enabled: true, checkpointIntervalSec: 120, mode: "cookies_only", storage: "local" };
+    const defaultPolicy = { enabled: true, checkpointIntervalSec: DEFAULTS.browserProfiles.defaultCheckpointIntervalSec, mode: "cookies_only", storage: "local" };
 
     if (req.method === "GET") {
       if (!ctx.authSession?.getAccessToken()) {

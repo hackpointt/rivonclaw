@@ -1,6 +1,6 @@
 import { writeFileSync, existsSync } from "node:fs";
 import { createLogger } from "@rivonclaw/logger";
-import { resolveGatewayPort } from "@rivonclaw/core";
+import { resolveGatewayPort, getApiBaseUrl } from "@rivonclaw/core";
 import { resolveOpenClawStateDir as resolveDefaultStateDir } from "@rivonclaw/core/node";
 import { resolveOpenClawConfigPath, readExistingConfig, resolveOpenClawStateDir, syncPermissions } from "@rivonclaw/gateway";
 import type { RouteHandler } from "./api-context.js";
@@ -16,6 +16,12 @@ export const handleSettingsRoutes: RouteHandler = async (req, res, url, pathname
     const ruleCount = storage.rules.getAll().length;
     const artifactCount = storage.artifacts.getAll().length;
     sendJson(res, 200, { status: "ok", ruleCount, artifactCount, deviceId: deviceId ?? null });
+    return true;
+  }
+
+  // --- API Base URL (for staging override) ---
+  if (pathname === "/api/app/api-base-url" && req.method === "GET") {
+    sendJson(res, 200, { apiBaseUrl: getApiBaseUrl("en") });
     return true;
   }
 

@@ -15,7 +15,7 @@ import { createLogger } from "@rivonclaw/logger";
 import type { Storage } from "@rivonclaw/storage";
 import type { SecretStore } from "@rivonclaw/secrets";
 import type { CustomerServiceConfig, CustomerServiceStatus } from "@rivonclaw/core";
-import { resolveGatewayPort } from "@rivonclaw/core";
+import { resolveGatewayPort, DEFAULTS } from "@rivonclaw/core";
 import { GatewayRpcClient, resolveOpenClawStateDir } from "@rivonclaw/gateway";
 import { createCustomerServiceModule, buildCustomerServicePrompt } from "@rivonclaw/customer-service";
 import type { CustomerServiceModule } from "@rivonclaw/customer-service";
@@ -157,7 +157,7 @@ async function forwardToAgent(
     const timer = setTimeout(() => {
       pendingReplies.delete(result.runId!);
       reject(new Error("Agent reply timeout (60s)"));
-    }, 60_000);
+    }, DEFAULTS.desktop.agentReplyTimeoutMs);
     pendingReplies.set(result.runId!, { resolve, reject, timer });
   });
 

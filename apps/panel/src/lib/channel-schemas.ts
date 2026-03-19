@@ -1,7 +1,7 @@
 export interface ChannelFieldConfig {
   id: string;                    // Field ID (e.g., "appId")
   label: string;                 // i18n key for label
-  type: "text" | "password" | "number" | "select" | "textarea";
+  type: "text" | "password" | "number" | "select" | "textarea" | "tags";
   required: boolean;
   placeholder?: string;          // i18n key for placeholder
   hint?: string;                 // i18n key for hint text
@@ -63,6 +63,18 @@ function groupPolicyField(): ChannelFieldConfig {
   };
 }
 
+function groupAllowFromField(hint: string): ChannelFieldConfig {
+  return {
+    id: "groupAllowFrom",
+    label: "channels.fieldGroupAllowFrom",
+    type: "tags",
+    required: false,
+    placeholder: "channels.fieldGroupAllowFromPlaceholder",
+    hint,
+    showWhen: { field: "groupPolicy", value: "allowlist" },
+  };
+}
+
 export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
   telegram: {
     fields: [
@@ -85,6 +97,7 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
       },
       dmPolicyField(),
       groupPolicyField(),
+      groupAllowFromField("channels.telegramGroupAllowFromHint"),
     ],
     commonFields: { enabled: true },
   },
@@ -161,6 +174,7 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
         options: GROUP_POLICY_OPTIONS,
         hint: "channels.feishuGroupPolicyHint",
       },
+      groupAllowFromField("channels.feishuGroupAllowFromHint"),
       {
         id: "requireMention",
         label: "channels.feishuRequireMention",
@@ -294,6 +308,9 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
         placeholder: "channels.msteamsTenantIdPlaceholder",
         hint: "channels.msteamsTenantIdHint",
       },
+      dmPolicyField(),
+      groupPolicyField(),
+      groupAllowFromField("channels.msteamsGroupAllowFromHint"),
     ],
     commonFields: { enabled: true },
   },
@@ -310,6 +327,8 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
         isSecret: true,
       },
       dmPolicyField(),
+      groupPolicyField(),
+      groupAllowFromField("channels.discordGroupAllowFromHint"),
     ],
     commonFields: { enabled: true },
   },
@@ -347,6 +366,8 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
         hint: "channels.slackModeHint",
       },
       dmPolicyField(),
+      groupPolicyField(),
+      groupAllowFromField("channels.slackGroupAllowFromHint"),
     ],
     commonFields: { enabled: true },
   },
@@ -370,6 +391,8 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
         hint: "channels.googlechatWebhookUrlHint",
       },
       dmPolicyField(),
+      groupPolicyField(),
+      groupAllowFromField("channels.googlechatGroupAllowFromHint"),
     ],
     commonFields: { enabled: true },
   },
@@ -408,6 +431,8 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
         hint: "channels.signalHttpUrlHint",
       },
       dmPolicyField(),
+      groupPolicyField(),
+      groupAllowFromField("channels.signalGroupAllowFromHint"),
     ],
     commonFields: { enabled: true },
   },
@@ -428,6 +453,8 @@ export const CHANNEL_SCHEMAS: Record<string, ChannelSchema> = {
         hint: "channels.imessageServiceHint",
       },
       dmPolicyField(),
+      groupPolicyField(),
+      groupAllowFromField("channels.imessageGroupAllowFromHint"),
     ],
     commonFields: { enabled: true },
   },

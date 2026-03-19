@@ -1,12 +1,50 @@
-import type { ToolScopeType, ToolSelection } from "@rivonclaw/core";
-import { createLogger } from "@rivonclaw/logger";
+import type { ToolScopeType, ToolSelection, GQL } from "@rivonclaw/core";
 import type { RouteHandler } from "./api-context.js";
 import { parseBody, sendJson } from "./route-utils.js";
-import { buildToolContext } from "../utils/tool-context-builder.js";
-
-const log = createLogger("panel-server");
+import { toolCapabilityResolver } from "../utils/tool-capability-resolver.js";
 
 export const handleToolRegistryRoutes: RouteHandler = async (req, res, url, pathname, ctx) => {
+  // GET /api/tools/effective-tools?sessionKey=xxx&scopeType=chat_session
+  // Called by capability-manager plugin to resolve effective tools on demand.
+  if (pathname === "/api/tools/effective-tools" && req.method === "GET") {
+    const sessionKey = url.searchParams.get("sessionKey");
+    const scopeType = (url.searchParams.get("scopeType") ?? "chat_session") as ToolScopeType;
+    if (!sessionKey) {
+      sendJson(res, 400, { error: "Missing sessionKey" });
+      return true;
+    }
+
+    if (!toolCapabilityResolver.isInitialized()) {
+      sendJson(res, 200, { effectiveToolIds: [] });
+      return true;
+    }
+
+    // Detect cron sessions: sessionKey contains ":cron:<jobId>:" segment
+    let lookupScopeType = scopeType;
+    let lookupScopeKey = sessionKey;
+    const cronMatch = sessionKey.match(/:cron:([^:]+)/);
+    if (cronMatch) {
+      lookupScopeType = "cron_job";
+      lookupScopeKey = cronMatch[1];
+    }
+
+    const selections = ctx.storage.toolSelections.getForScope(lookupScopeType, lookupScopeKey);
+    const runProfile: GQL.RunProfile | null = selections.length > 0
+      ? {
+          id: `ephemeral-${lookupScopeKey}`,
+          name: lookupScopeType === "cron_job" ? "Cron Selection" : "Session Selection",
+          selectedToolIds: selections.filter(s => s.enabled).map(s => s.toolId),
+          surfaceId: "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      : null; // No explicit selection → resolver uses default tools (system + custom, no entitled)
+
+    const result = toolCapabilityResolver.computeEffectiveTools(null, runProfile);
+    sendJson(res, 200, { effectiveToolIds: result.effectiveToolIds });
+    return true;
+  }
+
   // GET /api/tools/available — available tools (empty for guests, entitled tools for authenticated users)
   if (pathname === "/api/tools/available" && req.method === "GET") {
     if (!ctx.authSession?.getAccessToken()) {
@@ -19,6 +57,18 @@ export const handleToolRegistryRoutes: RouteHandler = async (req, res, url, path
       tools = await ctx.authSession.fetchAvailableTools();
     }
     sendJson(res, 200, { tools });
+    return true;
+  }
+
+  // GET /api/tools/surface-availability — tools available after surface restriction
+  if (pathname === "/api/tools/surface-availability" && req.method === "GET") {
+    if (!toolCapabilityResolver.isInitialized()) {
+      sendJson(res, 200, { availableToolIds: [] });
+      return true;
+    }
+    // No surface selected yet — returns all available tools
+    const availability = toolCapabilityResolver.computeSurfaceAvailability(null);
+    sendJson(res, 200, { availableToolIds: availability.availableToolIds });
     return true;
   }
 
@@ -49,14 +99,6 @@ export const handleToolRegistryRoutes: RouteHandler = async (req, res, url, path
     }
 
     ctx.storage.toolSelections.setForScope(body.scopeType, body.scopeKey, body.selections);
-
-    // Push built tool context to gateway plugin for immediate availability
-    const rpcClient = ctx.getRpcClient?.();
-    if (ctx.authSession && rpcClient?.isConnected()) {
-      buildToolContext(body.scopeType, body.scopeKey, ctx.storage, ctx.authSession)
-        .then(toolContext => rpcClient.request("browser_profiles_set_run_context", toolContext))
-        .catch((e: unknown) => log.warn("Failed to push tool context after PUT selections:", e));
-    }
 
     sendJson(res, 200, { ok: true });
     return true;
@@ -100,19 +142,7 @@ export const handleToolRegistryRoutes: RouteHandler = async (req, res, url, path
       return true;
     }
 
-    const toolContext = await buildToolContext(
-      body.scopeType as ToolScopeType,
-      body.scopeKey,
-      ctx.storage,
-      ctx.authSession,
-    );
-
-    const rpcClient = ctx.getRpcClient?.();
-    if (rpcClient?.isConnected()) {
-      await rpcClient.request("browser_profiles_set_run_context", toolContext);
-    }
-
-    sendJson(res, 200, toolContext);
+    sendJson(res, 200, { ok: true });
     return true;
   }
 
@@ -126,15 +156,6 @@ export const handleToolRegistryRoutes: RouteHandler = async (req, res, url, path
     }
 
     ctx.storage.toolSelections.deleteForScope(scopeType, scopeKey);
-
-    // Rebuild effective context (server will apply default preset since selections are now gone)
-    // and push to plugin so it reflects the new state, not stale old context.
-    const rpcClient = ctx.getRpcClient?.();
-    if (ctx.authSession && rpcClient?.isConnected()) {
-      buildToolContext(scopeType as ToolScopeType, scopeKey, ctx.storage, ctx.authSession)
-        .then(toolContext => rpcClient.request("browser_profiles_set_run_context", toolContext))
-        .catch((e: unknown) => log.warn("Failed to push tool context after DELETE selections:", e));
-    }
 
     sendJson(res, 200, { ok: true });
     return true;
@@ -160,13 +181,33 @@ export const handleToolRegistryRoutes: RouteHandler = async (req, res, url, path
       return true;
     }
 
-    const toolContext = await buildToolContext(
-      scopeType as ToolScopeType,
+    if (!toolCapabilityResolver.isInitialized()) {
+      sendJson(res, 200, { scopeType, scopeKey, effectiveTools: [] });
+      return true;
+    }
+
+    const selections = ctx.storage.toolSelections.getForScope(scopeType as ToolScopeType, scopeKey);
+    const now = new Date().toISOString();
+    const runProfile: GQL.RunProfile = {
+      id: selections.length > 0 ? `ephemeral-${scopeKey}` : "default",
+      name: selections.length > 0 ? "Session Selection" : "All Available",
+      selectedToolIds: selections.length > 0
+        ? selections.filter(s => s.enabled).map(s => s.toolId)
+        : toolCapabilityResolver.getAllAvailableToolIds(),
+      surfaceId: "",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const result = toolCapabilityResolver.computeEffectiveTools(null, runProfile);
+    sendJson(res, 200, {
+      scopeType,
       scopeKey,
-      ctx.storage,
-      ctx.authSession,
-    );
-    sendJson(res, 200, toolContext);
+      entitledTools: result.entitledToolIds,
+      surfaceId: result.surfaceId,
+      surfaceAllowedTools: result.surfaceAllowedToolIds,
+      runProfileSelectedTools: result.runProfileSelectedToolIds,
+      effectiveTools: result.effectiveToolIds,
+    });
     return true;
   }
 

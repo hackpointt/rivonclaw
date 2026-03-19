@@ -295,7 +295,7 @@ export function useProviderForm(onSave: (provider: string) => void) {
             if (status.status === "completed") {
               stopPolling();
               setOauthTokenPreview(status.tokenPreview || "oauth-token-••••••••");
-              setLabel(status.email || getProviderMeta(provider as LLMProvider)?.label || "OAuth");
+              setLabel((prev) => prev.trim() ? prev : (status.email || getProviderMeta(provider as LLMProvider)?.label || "OAuth"));
               setModel(getDefaultModelForProvider(provider as LLMProvider)?.modelId ?? "");
               setOauthManualMode(false);
               setOauthAuthUrl("");
@@ -326,7 +326,7 @@ export function useProviderForm(onSave: (provider: string) => void) {
     try {
       const result = await completeManualOAuth(provider, oauthCallbackUrl.trim());
       setOauthTokenPreview(result.tokenPreview || "oauth-token-••••••••");
-      setLabel(result.email || getProviderMeta(provider as LLMProvider)?.label || "OAuth");
+      setLabel((prev) => prev.trim() ? prev : (result.email || getProviderMeta(provider as LLMProvider)?.label || "OAuth"));
       setModel(getDefaultModelForProvider(provider as LLMProvider)?.modelId ?? "");
       setOauthManualMode(false);
       setOauthAuthUrl("");

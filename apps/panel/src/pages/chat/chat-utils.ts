@@ -1,4 +1,4 @@
-import { stripReasoningTagsFromText } from "@rivonclaw/core";
+import { stripReasoningTagsFromText, DEFAULTS } from "@rivonclaw/core";
 
 export type ChatImage = { data: string; mimeType: string };
 
@@ -64,15 +64,15 @@ export type SessionsListResult = {
 };
 
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-export const COMPRESS_MAX_DIMENSION = 1280; // resize longest side to this
-export const COMPRESS_TARGET_BYTES = 300 * 1024; // target base64 size after compression
-export const COMPRESS_INITIAL_QUALITY = 0.85;
-export const COMPRESS_MIN_QUALITY = 0.4;
+export const COMPRESS_MAX_DIMENSION = DEFAULTS.chat.compressMaxDimension;
+export const COMPRESS_TARGET_BYTES = DEFAULTS.chat.compressTargetBytes;
+export const COMPRESS_INITIAL_QUALITY = DEFAULTS.chat.compressInitialQuality;
+export const COMPRESS_MIN_QUALITY = DEFAULTS.chat.compressMinQuality;
 
 export const DEFAULT_SESSION_KEY = "agent:main:main";
-export const INITIAL_VISIBLE = 50;
+export const INITIAL_VISIBLE = DEFAULTS.chat.initialVisibleMessages;
 export const PAGE_SIZE = 20;
-export const FETCH_BATCH = 200;
+export const FETCH_BATCH = DEFAULTS.chat.fetchBatch;
 
 /** Static marker inserted by cleanMessageText for media attachments.
  *  Replaced with i18n text at render time. */

@@ -32,11 +32,12 @@ test.describe("LLM Providers", () => {
     // Close dropdown
     await window.locator(".provider-select-trigger").click();
 
-    // Subscription pricing table should be visible and have content
+    // Subscription pricing card should be visible (content depends on server availability)
     const subPricing = window.locator(".pricing-card");
     await expect(subPricing).toBeVisible();
-    const subPricingContent = subPricing.locator(".pricing-plan-block, .pricing-inner-table");
-    await expect(subPricingContent.first()).toBeVisible({ timeout: 10_000 });
+    // Either pricing data loaded (table/plan blocks) or "unavailable" message is shown
+    const subPricingLoaded = subPricing.locator(".pricing-plan-block, .pricing-inner-table, .pricing-status-compact");
+    await expect(subPricingLoaded.first()).toBeVisible({ timeout: 10_000 });
 
     // -- Switch to API Key tab --
     const apiTab = window.locator(".tab-btn", { hasText: /API/i });
@@ -53,11 +54,11 @@ test.describe("LLM Providers", () => {
     // Close dropdown
     await window.locator(".provider-select-trigger").click();
 
-    // API pricing table should be visible and have content
+    // API pricing card should be visible (content depends on server availability)
     const apiPricing = window.locator(".pricing-card");
     await expect(apiPricing).toBeVisible();
-    const apiTable = apiPricing.locator(".pricing-inner-table");
-    await expect(apiTable).toBeVisible({ timeout: 10_000 });
+    const apiPricingLoaded = apiPricing.locator(".pricing-inner-table, .pricing-status-compact");
+    await expect(apiPricingLoaded.first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("Gemini OAuth (subscription) has enough models", async ({ window }) => {

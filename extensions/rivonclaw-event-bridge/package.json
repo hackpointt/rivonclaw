@@ -18,7 +18,9 @@
     "build": "tsdown",
     "lint": "oxlint"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@rivonclaw/plugin-sdk": "workspace:*"
+  },
   "devDependencies": {
     "tsdown": "^0.20.3",
     "oxlint": "^1.43.0"

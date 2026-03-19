@@ -4,9 +4,10 @@ import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import type { PendingImage } from "./chat-utils.js";
 import { IMAGE_TYPES } from "./chat-utils.js";
 import { readFileAsPending } from "./chat-image-utils.js";
+import { DEFAULTS } from "@rivonclaw/core";
 
-// Gateway attachment limit is 5 MB (image-only for webchat)
-const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1000 * 1000;
+// Gateway attachment limit (image-only for webchat)
+const MAX_IMAGE_ATTACHMENT_BYTES = DEFAULTS.chat.maxImageAttachmentBytes;
 
 export type ChatInputAreaProps = {
   draft: string;

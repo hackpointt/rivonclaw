@@ -25,13 +25,26 @@ export interface AuthPayload {
   userId: Scalars['String']['output'];
 }
 
+/** A tool with its availability status for the current user */
+export interface AvailableTool {
+  allowed: Scalars['Boolean']['output'];
+  category: ToolCategory;
+  denialReason?: Maybe<Scalars['String']['output']>;
+  description: Scalars['String']['output'];
+  displayName: Scalars['String']['output'];
+  id: ToolId;
+  requiredEntitlements: Array<Scalars['String']['output']>;
+  serviceCategory: ServiceCategory;
+}
+
 /** Isolated browser profile for multi-profile agent sessions */
 export interface BrowserProfile {
   createdAt: Scalars['DateTimeISO']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   notes?: Maybe<Scalars['String']['output']>;
-  proxyPolicy?: Maybe<BrowserProfileProxyPolicy>;
+  proxyPolicy: BrowserProfileProxyPolicy;
+  sessionStatePolicy: BrowserProfileSessionStatePolicy;
   status: BrowserProfileStatus;
   tags?: Maybe<Array<Scalars['String']['output']>>;
   updatedAt: Scalars['DateTimeISO']['output'];
@@ -42,8 +55,8 @@ export interface BrowserProfile {
 export const BrowserProfileAuditAction = {
   Archived: 'ARCHIVED',
   Created: 'CREATED',
-  Materialized: 'MATERIALIZED',
-  ProxyTested: 'PROXY_TESTED',
+  Deleted: 'DELETED',
+  Unarchived: 'UNARCHIVED',
   Updated: 'UPDATED'
 } as const;
 
@@ -66,6 +79,20 @@ export interface BrowserProfileProxyPolicy {
   enabled: Scalars['Boolean']['output'];
 }
 
+/** Result of resolving the best browser profile for a task */
+export interface BrowserProfileResolveForTaskResult {
+  profile: BrowserProfile;
+  totalCandidates: Scalars['Int']['output'];
+}
+
+/** Session state persistence policy for a browser profile */
+export interface BrowserProfileSessionStatePolicy {
+  checkpointIntervalSec: Scalars['Float']['output'];
+  enabled: Scalars['Boolean']['output'];
+  mode: Scalars['String']['output'];
+  storage: Scalars['String']['output'];
+}
+
 /** Lifecycle status of a browser profile */
 export const BrowserProfileStatus = {
   Active: 'ACTIVE',
@@ -74,6 +101,24 @@ export const BrowserProfileStatus = {
 } as const;
 
 export type BrowserProfileStatus = typeof BrowserProfileStatus[keyof typeof BrowserProfileStatus];
+/** Filter input for listing browser profiles */
+export interface BrowserProfilesFilterInput {
+  /** Filter by name prefixes */
+  namePrefixes?: InputMaybe<Array<Scalars['String']['input']>>;
+  /** Free-text search query against profile name */
+  query?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by status values */
+  status?: InputMaybe<Array<Scalars['String']['input']>>;
+  /** Filter by tags (profiles matching ANY of these tags) */
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
+}
+
+/** Pagination input for listing browser profiles */
+export interface BrowserProfilesPaginationInput {
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+}
+
 /** Customer service platform configurations (singleton) */
 export interface CsConfig {
   wecom?: Maybe<WeComConfig>;
@@ -100,13 +145,37 @@ export interface CsUsageRecord {
   userId: Scalars['String']['output'];
 }
 
+/** Captcha challenge response */
+export interface CaptchaResponse {
+  svg: Scalars['String']['output'];
+  token: Scalars['String']['output'];
+}
+
 /** Input for creating a new browser profile */
 export interface CreateBrowserProfileInput {
   name: Scalars['String']['input'];
   notes?: InputMaybe<Scalars['String']['input']>;
   proxyBaseUrl?: InputMaybe<Scalars['String']['input']>;
   proxyEnabled?: InputMaybe<Scalars['Boolean']['input']>;
+  sessionStatePolicy?: InputMaybe<SessionStatePolicyInput>;
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
+}
+
+/** Input for creating a new RunProfile */
+export interface CreateRunProfileInput {
+  name: Scalars['String']['input'];
+  selectedToolIds: Array<Scalars['String']['input']>;
+  surfaceId: Scalars['String']['input'];
+}
+
+/** Input for creating a new Surface */
+export interface CreateSurfaceInput {
+  allowedCategories: Array<Scalars['String']['input']>;
+  allowedToolIds: Array<Scalars['String']['input']>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  /** Create from a preset template */
+  presetId?: InputMaybe<Scalars['String']['input']>;
 }
 
 /** Supported payment currencies */
@@ -132,6 +201,16 @@ export const EntitlementKey = {
 } as const;
 
 export type EntitlementKey = typeof EntitlementKey[keyof typeof EntitlementKey];
+/** Entitlement set pushed to desktop on login / subscription change */
+export interface EntitlementSetModel {
+  /** Tool categories the plan grants access to */
+  categories: Array<Scalars['String']['output']>;
+  /** Service categories the plan grants access to */
+  serviceCategories: Array<Scalars['String']['output']>;
+  /** Tool IDs the user's plan grants access to */
+  toolIds: Array<Scalars['String']['output']>;
+}
+
 /** Origin of an entitlement grant */
 export const EntitlementSource = {
   Override: 'OVERRIDE',
@@ -147,6 +226,8 @@ export interface GeneratePairingResult {
 
 /** Login input */
 export interface LoginInput {
+  captchaAnswer: Scalars['String']['input'];
+  captchaToken: Scalars['String']['input'];
   email: Scalars['String']['input'];
   password: Scalars['String']['input'];
 }
@@ -171,14 +252,30 @@ export interface ModelPricing {
 export interface Mutation {
   /** Allocate a new seat to a gateway */
   allocateSeat: CsSeat;
+  /** Batch archive browser profiles */
+  batchArchiveBrowserProfiles: Scalars['Int']['output'];
+  /** Batch delete browser profiles */
+  batchDeleteBrowserProfiles: Scalars['Int']['output'];
   /** Start checkout for a subscription plan */
   checkout: UserSubscription;
   /** Create a new browser profile */
   createBrowserProfile: BrowserProfile;
+  /** Create a new run profile */
+  createRunProfile: RunProfile;
+  /** Create a new surface */
+  createSurface: Surface;
+  /** Create a surface from a preset template */
+  createSurfaceFromPreset: Surface;
   /** Deallocate a seat by ID */
   deallocateSeat: Scalars['Boolean']['output'];
   /** Delete a browser profile permanently */
   deleteBrowserProfile: Scalars['Boolean']['output'];
+  /** Delete a run profile */
+  deleteRunProfile: Scalars['Boolean']['output'];
+  /** Delete the session state backup for a profile */
+  deleteSessionStateBackup: Scalars['Boolean']['output'];
+  /** Delete a surface */
+  deleteSurface: Scalars['Boolean']['output'];
   /** Delete WeCom customer service credentials */
   deleteWeComConfig: CsConfig;
   /** Generate a 6-character pairing code for QR display */
@@ -191,12 +288,20 @@ export interface Mutation {
   refreshToken: AuthPayload;
   /** Register a new user account */
   register: AuthPayload;
+  /** Request a new captcha challenge */
+  requestCaptcha: CaptchaResponse;
   /** Revoke all sessions for the current user (remote logout) */
   revokeAllSessions: Scalars['Int']['output'];
   /** Save WeCom customer service credentials */
   saveWeComConfig: CsConfig;
   /** Update an existing browser profile */
   updateBrowserProfile?: Maybe<BrowserProfile>;
+  /** Update an existing run profile */
+  updateRunProfile?: Maybe<RunProfile>;
+  /** Update an existing surface */
+  updateSurface?: Maybe<Surface>;
+  /** Upload (upsert) an encrypted session state backup */
+  uploadSessionStateBackup: Scalars['Boolean']['output'];
   /** Verify a pairing code from mobile and create relay token */
   verifyPairingCode: VerifyPairingResult;
 }
@@ -204,6 +309,16 @@ export interface Mutation {
 
 export interface MutationAllocateSeatArgs {
   gatewayId: Scalars['String']['input'];
+}
+
+
+export interface MutationBatchArchiveBrowserProfilesArgs {
+  ids: Array<Scalars['ID']['input']>;
+}
+
+
+export interface MutationBatchDeleteBrowserProfilesArgs {
+  ids: Array<Scalars['ID']['input']>;
 }
 
 
@@ -217,12 +332,42 @@ export interface MutationCreateBrowserProfileArgs {
 }
 
 
+export interface MutationCreateRunProfileArgs {
+  input: CreateRunProfileInput;
+}
+
+
+export interface MutationCreateSurfaceArgs {
+  input: CreateSurfaceInput;
+}
+
+
+export interface MutationCreateSurfaceFromPresetArgs {
+  presetId: Scalars['String']['input'];
+}
+
+
 export interface MutationDeallocateSeatArgs {
   seatId: Scalars['String']['input'];
 }
 
 
 export interface MutationDeleteBrowserProfileArgs {
+  id: Scalars['ID']['input'];
+}
+
+
+export interface MutationDeleteRunProfileArgs {
+  id: Scalars['ID']['input'];
+}
+
+
+export interface MutationDeleteSessionStateBackupArgs {
+  profileId: Scalars['ID']['input'];
+}
+
+
+export interface MutationDeleteSurfaceArgs {
   id: Scalars['ID']['input'];
 }
 
@@ -268,9 +413,36 @@ export interface MutationUpdateBrowserProfileArgs {
 }
 
 
+export interface MutationUpdateRunProfileArgs {
+  id: Scalars['ID']['input'];
+  input: UpdateRunProfileInput;
+}
+
+
+export interface MutationUpdateSurfaceArgs {
+  id: Scalars['ID']['input'];
+  input: UpdateSurfaceInput;
+}
+
+
+export interface MutationUploadSessionStateBackupArgs {
+  manifest: SessionStateBackupManifestInput;
+  payload: Scalars['String']['input'];
+  profileId: Scalars['ID']['input'];
+}
+
+
 export interface MutationVerifyPairingCodeArgs {
   mobileDeviceId: Scalars['String']['input'];
   pairingCode: Scalars['String']['input'];
+}
+
+/** Paginated browser profiles result */
+export interface PaginatedBrowserProfiles {
+  items: Array<BrowserProfile>;
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
 }
 
 export interface Plan {
@@ -303,6 +475,8 @@ export interface ProviderPricing {
 }
 
 export interface Query {
+  /** Get available tools for the authenticated user */
+  availableTools: Array<AvailableTool>;
   /** Get a single browser profile by ID */
   browserProfile?: Maybe<BrowserProfile>;
   /** Get audit log for a browser profile */
@@ -310,11 +484,15 @@ export interface Query {
   /** Get the browser profiles prompt addendum (requires entitlement) */
   browserProfilePromptAddendum?: Maybe<Scalars['String']['output']>;
   /** List browser profiles for the authenticated user */
-  browserProfiles: Array<BrowserProfile>;
+  browserProfiles: PaginatedBrowserProfiles;
   /** Check whether the user has a specific entitlement */
   checkEntitlement: EntitlementCheckResult;
+  /** Check if the authenticated user can access a specific tool */
+  checkToolAccess: ToolAccessResult;
   /** Get customer service platform configuration */
   csConfig?: Maybe<CsConfig>;
+  /** Returns the current user's entitlement set (toolIds, categories, serviceCategories) */
+  entitlementSet: EntitlementSetModel;
   /** List all entitlements for the authenticated user */
   entitlements: Array<UserEntitlement>;
   /** Get current authenticated user profile */
@@ -325,10 +503,18 @@ export interface Query {
   planDefinitions: Array<PlanDefinition>;
   /** Get pricing for all providers */
   pricing: Array<ProviderPricing>;
+  /** Resolve the best browser profile for a given task description */
+  resolveProfileForTask?: Maybe<BrowserProfileResolveForTaskResult>;
+  /** Get a single run profile by ID */
+  runProfile?: Maybe<RunProfile>;
+  /** List run profiles for the authenticated user, optionally filtered by surface */
+  runProfiles: Array<RunProfile>;
   /** Get seat usage records for a billing period */
   seatUsage: Array<CsUsageRecord>;
   /** List all allocated seats for the current user */
   seats: Array<CsSeat>;
+  /** Download the encrypted session state backup for a profile */
+  sessionStateBackup?: Maybe<SessionStateBackupDownload>;
   /** Get a single skill by slug */
   skill?: Maybe<Skill>;
   /** Get all skill categories with counts */
@@ -337,6 +523,14 @@ export interface Query {
   skills: SkillConnection;
   /** Get current user subscription status */
   subscriptionStatus?: Maybe<UserSubscription>;
+  /** Get a single surface by ID */
+  surface?: Maybe<Surface>;
+  /** List available surface presets */
+  surfacePresets: Array<SurfacePresetModel>;
+  /** List surfaces for the authenticated user */
+  surfaces: Array<Surface>;
+  /** Get the full tool registry (all defined tools) */
+  toolRegistry: Array<ToolDefinition>;
   /** Batch-verify relay access tokens */
   verifyRelayTokens: Array<RelayTokenResult>;
   /** Long-poll for pairing completion (30s timeout) */
@@ -354,8 +548,19 @@ export interface QueryBrowserProfileAuditLogArgs {
 }
 
 
+export interface QueryBrowserProfilesArgs {
+  filter?: InputMaybe<BrowserProfilesFilterInput>;
+  pagination?: InputMaybe<BrowserProfilesPaginationInput>;
+}
+
+
 export interface QueryCheckEntitlementArgs {
   key: EntitlementKey;
+}
+
+
+export interface QueryCheckToolAccessArgs {
+  toolId: Scalars['String']['input'];
 }
 
 
@@ -367,8 +572,28 @@ export interface QueryPricingArgs {
 }
 
 
+export interface QueryResolveProfileForTaskArgs {
+  input: ResolveProfileForTaskInput;
+}
+
+
+export interface QueryRunProfileArgs {
+  id: Scalars['ID']['input'];
+}
+
+
+export interface QueryRunProfilesArgs {
+  surfaceId?: InputMaybe<Scalars['ID']['input']>;
+}
+
+
 export interface QuerySeatUsageArgs {
   period?: InputMaybe<Scalars['String']['input']>;
+}
+
+
+export interface QuerySessionStateBackupArgs {
+  profileId: Scalars['ID']['input'];
 }
 
 
@@ -386,6 +611,11 @@ export interface QuerySkillsArgs {
 }
 
 
+export interface QuerySurfaceArgs {
+  id: Scalars['ID']['input'];
+}
+
+
 export interface QueryVerifyRelayTokensArgs {
   tokens: Array<Scalars['String']['input']>;
 }
@@ -397,6 +627,8 @@ export interface QueryWaitForPairingArgs {
 
 /** Registration input */
 export interface RegisterInput {
+  captchaAnswer: Scalars['String']['input'];
+  captchaToken: Scalars['String']['input'];
   email: Scalars['String']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
   password: Scalars['String']['input'];
@@ -409,6 +641,25 @@ export interface RelayTokenResult {
   valid: Scalars['Boolean']['output'];
 }
 
+/** Input for resolving a browser profile for a task */
+export interface ResolveProfileForTaskInput {
+  /** Preferred tags to bias profile selection */
+  preferredTags?: InputMaybe<Array<Scalars['String']['input']>>;
+  /** Description of the task that needs a browser profile */
+  taskDescription: Scalars['String']['input'];
+}
+
+/** RunProfile entity — defines tool selection for a specific run. userId=null for system presets. */
+export interface RunProfile {
+  createdAt: Scalars['DateTimeISO']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  selectedToolIds: Array<Scalars['String']['output']>;
+  surfaceId: Scalars['String']['output'];
+  updatedAt: Scalars['DateTimeISO']['output'];
+  userId?: Maybe<Scalars['String']['output']>;
+}
+
 /** Seat connection states */
 export const SeatStatus = {
   Active: 'ACTIVE',
@@ -416,6 +667,44 @@ export const SeatStatus = {
 } as const;
 
 export type SeatStatus = typeof SeatStatus[keyof typeof SeatStatus];
+/** Tool service category */
+export const ServiceCategory = {
+  BrowserProfiles: 'BROWSER_PROFILES'
+} as const;
+
+export type ServiceCategory = typeof ServiceCategory[keyof typeof ServiceCategory];
+/** Session state backup with payload for download */
+export interface SessionStateBackupDownload {
+  manifest: SessionStateBackupManifest;
+  payload: Scalars['String']['output'];
+}
+
+/** Manifest metadata for a session state backup */
+export interface SessionStateBackupManifest {
+  cookieCount: Scalars['Float']['output'];
+  hash: Scalars['String']['output'];
+  profileId: Scalars['String']['output'];
+  target: Scalars['String']['output'];
+  updatedAt: Scalars['Float']['output'];
+}
+
+/** Input for session state backup manifest */
+export interface SessionStateBackupManifestInput {
+  cookieCount: Scalars['Float']['input'];
+  hash: Scalars['String']['input'];
+  profileId: Scalars['String']['input'];
+  target: Scalars['String']['input'];
+  updatedAt: Scalars['Float']['input'];
+}
+
+/** Input for session state policy fields */
+export interface SessionStatePolicyInput {
+  checkpointIntervalSec?: InputMaybe<Scalars['Float']['input']>;
+  enabled?: InputMaybe<Scalars['Boolean']['input']>;
+  mode?: InputMaybe<Scalars['String']['input']>;
+  storage?: InputMaybe<Scalars['String']['input']>;
+}
+
 export interface Skill {
   author: Scalars['String']['output'];
   chinaAvailable: Scalars['Boolean']['output'];
@@ -470,14 +759,85 @@ export const SubscriptionStatus = {
 } as const;
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
+/** Surface entity — defines tool exposure boundary for a usage scenario. userId=null for system presets. */
+export interface Surface {
+  allowedCategories: Array<Scalars['String']['output']>;
+  allowedToolIds: Array<Scalars['String']['output']>;
+  createdAt: Scalars['DateTimeISO']['output'];
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  presetId?: Maybe<Scalars['String']['output']>;
+  updatedAt: Scalars['DateTimeISO']['output'];
+  userId?: Maybe<Scalars['String']['output']>;
+}
+
+/** Preset Surface template provided for common apps */
+export interface SurfacePresetModel {
+  allowedCategories: Array<Scalars['String']['output']>;
+  allowedToolIds: Array<Scalars['String']['output']>;
+  description: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+}
+
+/** Result of checking access to a specific tool */
+export interface ToolAccessResult {
+  allowed: Scalars['Boolean']['output'];
+  reason?: Maybe<Scalars['String']['output']>;
+  toolId: Scalars['String']['output'];
+}
+
+/** Tool functional category */
+export const ToolCategory = {
+  BrowserProfiles: 'BROWSER_PROFILES'
+} as const;
+
+export type ToolCategory = typeof ToolCategory[keyof typeof ToolCategory];
+/** Definition of a tool in the registry */
+export interface ToolDefinition {
+  category: ToolCategory;
+  description: Scalars['String']['output'];
+  displayName: Scalars['String']['output'];
+  id: ToolId;
+  requiredEntitlements: Array<Scalars['String']['output']>;
+  serviceCategory: ServiceCategory;
+}
+
+/** Unique tool identifier */
+export const ToolId = {
+  BrowserProfilesFind: 'BROWSER_PROFILES_FIND',
+  BrowserProfilesGet: 'BROWSER_PROFILES_GET',
+  BrowserProfilesList: 'BROWSER_PROFILES_LIST',
+  BrowserProfilesManage: 'BROWSER_PROFILES_MANAGE',
+  BrowserProfilesTestProxy: 'BROWSER_PROFILES_TEST_PROXY'
+} as const;
+
+export type ToolId = typeof ToolId[keyof typeof ToolId];
 /** Input for updating an existing browser profile */
 export interface UpdateBrowserProfileInput {
   name?: InputMaybe<Scalars['String']['input']>;
   notes?: InputMaybe<Scalars['String']['input']>;
   proxyBaseUrl?: InputMaybe<Scalars['String']['input']>;
   proxyEnabled?: InputMaybe<Scalars['Boolean']['input']>;
+  sessionStatePolicy?: InputMaybe<SessionStatePolicyInput>;
   status?: InputMaybe<BrowserProfileStatus>;
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
+}
+
+/** Input for updating an existing RunProfile */
+export interface UpdateRunProfileInput {
+  name?: InputMaybe<Scalars['String']['input']>;
+  selectedToolIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  surfaceId?: InputMaybe<Scalars['String']['input']>;
+}
+
+/** Input for updating an existing Surface */
+export interface UpdateSurfaceInput {
+  allowedCategories?: InputMaybe<Array<Scalars['String']['input']>>;
+  allowedToolIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
 }
 
 /** A single entitlement granted to a user */

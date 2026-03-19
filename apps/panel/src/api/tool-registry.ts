@@ -47,15 +47,12 @@ export async function saveToolSelections(
   if (!res.ok) throw new Error(`saveToolSelections failed: ${res.status}`);
 }
 
-/** Ensure tool context (including default presets) is pushed to the gateway plugin for a scope. */
-export async function ensureToolContext(
-  scopeType: string,
-  scopeKey: string,
-): Promise<void> {
-  const res = await fetch(`${BASE}/ensure-context`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scopeType, scopeKey }),
-  });
-  if (!res.ok) throw new Error(`ensureToolContext failed: ${res.status}`);
+export async function fetchSurfaceAvailability(): Promise<string[]> {
+  const res = await fetch(`${BASE}/surface-availability`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { availableToolIds: string[] };
+  return data.availableToolIds;
 }
+
+// ensureToolContext removed — context is now pushed automatically by Desktop
+// when gateway fires session_start via the event-bridge pattern.

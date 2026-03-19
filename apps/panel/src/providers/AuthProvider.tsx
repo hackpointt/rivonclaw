@@ -154,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshToken: payload.refreshToken,
       }),
     });
+    tokenRef.current = payload.accessToken;
     setToken(payload.accessToken);
     setUser({
       userId: payload.userId,
@@ -177,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshToken: payload.refreshToken,
       }),
     });
+    tokenRef.current = payload.accessToken;
     setToken(payload.accessToken);
     setUser({
       userId: payload.userId,

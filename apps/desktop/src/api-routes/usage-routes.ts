@@ -1,3 +1,4 @@
+import { DEFAULTS } from "@rivonclaw/core";
 import { createLogger } from "@rivonclaw/logger";
 import { resolveOpenClawConfigPath, readExistingConfig } from "@rivonclaw/gateway";
 import { loadCostUsageSummary, discoverAllSessions, loadSessionCostSummary } from "../usage/session-usage.js";
@@ -40,7 +41,7 @@ interface UsageFilter {
 
 // Simple cache with TTL for usage data
 const usageCache = new Map<string, { data: UsageSummary; expiresAt: number }>();
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = DEFAULTS.desktop.usageCacheTtlMs;
 
 function getCachedUsage(cacheKey: string): UsageSummary | null {
   const cached = usageCache.get(cacheKey);

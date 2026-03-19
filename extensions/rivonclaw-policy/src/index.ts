@@ -1,12 +1,11 @@
-import { createLogger } from "@rivonclaw/logger";
+import { defineRivonClawPlugin } from "@rivonclaw/plugin-sdk";
+import type { PluginApi } from "@rivonclaw/plugin-sdk";
 import { createPolicyInjector } from "@rivonclaw/policy";
 import type {
   GuardProvider,
   OpenClawPluginAPI,
   PolicyProvider,
 } from "@rivonclaw/policy";
-
-const log = createLogger("rivonclaw:plugin");
 
 /** Options for creating the RivonClaw OpenClaw plugin. */
 export interface RivonClawPluginOptions {
@@ -25,15 +24,17 @@ export interface RivonClawPluginOptions {
  * directives until a proper condition DSL is implemented.
  */
 export function createRivonClawPlugin(options: RivonClawPluginOptions) {
-  return {
-    name: "rivonclaw" as const,
+  return defineRivonClawPlugin({
+    id: "rivonclaw-policy",
+    name: "RivonClaw Policy",
 
-    register(api: OpenClawPluginAPI): void {
+    setup(api: PluginApi) {
       const policyHandler = createPolicyInjector(options.policyProvider, options.guardProvider);
 
-      api.registerHook("before_agent_start", policyHandler);
-
-      log.info("RivonClaw plugin registered");
+      // This plugin uses the registerHook API pattern (OpenClawPluginAPI)
+      // rather than the standard api.on pattern.
+      const hookApi = api as unknown as OpenClawPluginAPI;
+      hookApi.registerHook("before_agent_start", policyHandler);
     },
-  };
+  });
 }

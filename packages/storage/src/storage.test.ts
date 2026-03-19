@@ -1015,14 +1015,14 @@ describe("ToolSelections", () => {
 
   it("listScopes returns distinct scope pairs", () => {
     storage.toolSelections.setForScope("chat_session", "s1", [
-      { toolId: "browser_profiles-list", enabled: true },
+      { toolId: "browser_profiles_list", enabled: true },
     ]);
     storage.toolSelections.setForScope("cron_job", "c1", [
-      { toolId: "browser_profiles-get", enabled: true },
+      { toolId: "browser_profiles_get", enabled: true },
     ]);
     storage.toolSelections.setForScope("chat_session", "s1", [
-      { toolId: "browser_profiles-list", enabled: true },
-      { toolId: "browser_profiles-manage", enabled: false },
+      { toolId: "browser_profiles_list", enabled: true },
+      { toolId: "browser_profiles_manage", enabled: false },
     ]);
 
     const scopes = storage.toolSelections.listScopes();

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { deleteChannelAccount, trackEvent, type ChannelAccountSnapshot } from "../api/index.js";
+import { deleteChannelAccount, getChannelAccountConfig, trackEvent, type ChannelAccountSnapshot } from "../api/index.js";
 import { pollGatewayReady } from "../lib/poll-gateway.js";
 import { AddChannelAccountModal } from "../components/modals/AddChannelAccountModal.js";
 import { MobileBindingModal } from "../components/modals/MobileBindingModal.js";
@@ -72,30 +72,42 @@ export function ChannelsPage() {
     setSelectedDropdownChannel("");
   }
 
-  function handleEditAccount(channelId: string, account: ChannelAccountSnapshot) {
+  async function handleEditAccount(channelId: string, account: ChannelAccountSnapshot) {
     const knownChannel = KNOWN_CHANNELS.find(c => c.id === channelId);
     const label = knownChannel ? t(knownChannel.labelKey) : snapshot?.channelLabels[channelId] || channelId;
 
     setSelectedChannelId(channelId);
     setSelectedChannelLabel(label);
 
-    // Build config from account snapshot
-    const config: Record<string, unknown> = {
-      enabled: account.enabled ?? true,
-    };
+    // Fetch full config from SQLite instead of using limited snapshot fields
+    try {
+      const data = await getChannelAccountConfig(channelId, account.accountId);
+      const config = data.config || {};
+      config.enabled = account.enabled ?? true; // enabled comes from runtime snapshot
 
-    // Add channel-specific fields if they exist
-    if (account.dmPolicy) config.dmPolicy = account.dmPolicy;
-    if (account.groupPolicy) config.groupPolicy = account.groupPolicy;
-    if (account.streamMode) config.streamMode = account.streamMode;
-    if (account.webhookUrl) config.webhookUrl = account.webhookUrl;
-    if (account.mode) config.mode = account.mode;
+      setEditingAccount({
+        accountId: account.accountId,
+        name: data.name || account.name || undefined,
+        config,
+      });
+    } catch {
+      // Fallback to snapshot-based config if SQLite record doesn't exist yet
+      const config: Record<string, unknown> = {
+        enabled: account.enabled ?? true,
+      };
+      if (account.dmPolicy) config.dmPolicy = account.dmPolicy;
+      if (account.groupPolicy) config.groupPolicy = account.groupPolicy;
+      if (account.streamMode) config.streamMode = account.streamMode;
+      if (account.webhookUrl) config.webhookUrl = account.webhookUrl;
+      if (account.mode) config.mode = account.mode;
 
-    setEditingAccount({
-      accountId: account.accountId,
-      name: account.name || undefined,
-      config,
-    });
+      setEditingAccount({
+        accountId: account.accountId,
+        name: account.name || undefined,
+        config,
+      });
+    }
+
     setModalOpen(true);
   }
 

@@ -12,6 +12,7 @@ import {
 } from "../api/browser-profiles.js";
 import { trackEvent } from "../api/index.js";
 import { ConfirmDialog } from "../components/modals/ConfirmDialog.js";
+import { DEFAULTS } from "@rivonclaw/core";
 
 interface BrowserProfileFormState {
   name: string;
@@ -33,7 +34,7 @@ const EMPTY_FORM: BrowserProfileFormState = {
   notes: "",
   status: "active",
   sessionEnabled: true,
-  sessionCheckpointIntervalSec: 120,
+  sessionCheckpointIntervalSec: DEFAULTS.browserProfiles.defaultCheckpointIntervalSec,
   sessionStorage: "local",
 };
 
@@ -64,7 +65,7 @@ export function BrowserProfilesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "ACTIVE" | "ARCHIVED">("all");
 
   // Pagination state
-  const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+  const PAGE_SIZE_OPTIONS = DEFAULTS.pagination.browserProfilesOptions;
   const [currentPage, setCurrentPage] = useState(0);
   const [totalProfiles, setTotalProfiles] = useState(0);
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0]);
@@ -139,7 +140,7 @@ export function BrowserProfilesPage() {
       notes: profile.notes ?? "",
       status: profile.status,
       sessionEnabled: sp?.enabled ?? true,
-      sessionCheckpointIntervalSec: sp?.checkpointIntervalSec ?? 120,
+      sessionCheckpointIntervalSec: sp?.checkpointIntervalSec ?? DEFAULTS.browserProfiles.defaultCheckpointIntervalSec,
       sessionStorage: (sp?.storage as "local" | "cloud") ?? "local",
     });
     setFormError(null);
@@ -793,7 +794,7 @@ export function BrowserProfilesPage() {
                       min={30}
                       max={3600}
                       value={form.sessionCheckpointIntervalSec}
-                      onChange={(e) => updateField("sessionCheckpointIntervalSec", Number(e.target.value) || 120)}
+                      onChange={(e) => updateField("sessionCheckpointIntervalSec", Number(e.target.value) || DEFAULTS.browserProfiles.defaultCheckpointIntervalSec)}
                     />
                     <div className="form-hint">
                       {t("browserProfiles.sessionStateIntervalHint")}

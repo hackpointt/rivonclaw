@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useMutation } from "@apollo/client/react";
 import type { TFunction } from "i18next";
+import { GQL } from "@rivonclaw/core";
 import { useAuth } from "../../providers/AuthProvider.js";
+import { REQUEST_CAPTCHA } from "../../api/auth-queries.js";
 import { formatError } from "@rivonclaw/core";
 import { Modal } from "./Modal.js";
 import { useToast } from "../Toast.js";
@@ -12,6 +15,9 @@ const AUTH_ERROR_MAP: Record<string, string> = {
   "Invalid email or password": "auth.errorInvalidCredentials",
   "Login failed": "auth.errorLoginFailed",
   "Registration failed": "auth.errorRegisterFailed",
+  "Captcha expired or invalid": "auth.captchaExpired",
+  "Incorrect captcha": "auth.captchaError",
+  "Too many captcha attempts": "auth.captchaExpired",
 };
 
 function translateAuthError(err: unknown, t: TFunction): string {
@@ -46,17 +52,46 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captchaSvg, setCaptchaSvg] = useState("");
+  const [captchaError, setCaptchaError] = useState(false);
+
+  const [requestCaptcha] = useMutation<{ requestCaptcha: GQL.CaptchaResponse }>(REQUEST_CAPTCHA);
+
+  const refreshCaptcha = useCallback(async () => {
+    setCaptchaAnswer("");
+    setCaptchaError(false);
+    try {
+      const { data } = await requestCaptcha();
+      if (data?.requestCaptcha) {
+        setCaptchaToken(data.requestCaptcha.token);
+        setCaptchaSvg(data.requestCaptcha.svg);
+      } else {
+        setCaptchaError(true);
+      }
+    } catch {
+      setCaptchaError(true);
+    }
+  }, [requestCaptcha]);
+
   // Reset form state when modal opens/closes
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      refreshCaptcha();
+    } else {
       setActiveTab("login");
       setEmail("");
       setPassword("");
       setConfirmPassword("");
       setError(null);
       setSubmitting(false);
+      setCaptchaToken("");
+      setCaptchaAnswer("");
+      setCaptchaSvg("");
+      setCaptchaError(false);
     }
-  }, [isOpen]);
+  }, [isOpen, refreshCaptcha]);
 
   // Clear confirm password and errors when switching tabs
   function switchTab(tab: "login" | "register") {
@@ -84,16 +119,17 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     setSubmitting(true);
     try {
       if (activeTab === "login") {
-        await login({ email, password });
+        await login({ email, password, captchaToken, captchaAnswer });
         showToast(t("auth.loginSuccess"));
       } else {
-        await register({ email, password, name: null });
+        await register({ email, password, name: null, captchaToken, captchaAnswer });
         showToast(t("auth.registerSuccess"));
       }
       onClose();
       onSuccess?.();
     } catch (err) {
       setError(translateAuthError(err, t));
+      refreshCaptcha();
     } finally {
       setSubmitting(false);
     }
@@ -168,6 +204,30 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
               </label>
             </>
           )}
+
+          <div className="captcha-group">
+            <div className="captcha-display">
+              {captchaSvg ? (
+                <div className="captcha-svg" dangerouslySetInnerHTML={{ __html: captchaSvg }} />
+              ) : (
+                <div className="captcha-svg captcha-placeholder" onClick={refreshCaptcha}>
+                  {captchaError ? t("auth.captchaLoadFailed") : t("common.loading")}
+                </div>
+              )}
+              <button type="button" className="btn btn-secondary captcha-refresh-btn" onClick={refreshCaptcha} aria-label={t("auth.captchaRefresh")}>
+                {t("auth.captchaRefresh")}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={captchaAnswer}
+              onChange={(e) => setCaptchaAnswer(e.target.value)}
+              required
+              placeholder={t("auth.captchaPlaceholder")}
+              className="auth-input"
+              autoComplete="off"
+            />
+          </div>
 
           <button
             type="submit"

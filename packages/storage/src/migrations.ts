@@ -74,6 +74,7 @@ export const migrations: Migration[] = [
   {
     id: 4,
     name: "default_full_access_mode",
+    // Sync: default must match DEFAULTS.permissions.filePermissionsFullAccess in packages/core/src/defaults.ts
     sql: `
       INSERT OR IGNORE INTO settings (key, value) VALUES ('file-permissions-full-access', 'true');
     `,
@@ -290,6 +291,21 @@ export const migrations: Migration[] = [
         enabled INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (scope_type, scope_key, tool_id)
+      );
+    `,
+  },
+  {
+    id: 23,
+    name: "add_channel_accounts_table",
+    sql: `
+      CREATE TABLE IF NOT EXISTS channel_accounts (
+        channel_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        name TEXT,
+        config TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (channel_id, account_id)
       );
     `,
   },

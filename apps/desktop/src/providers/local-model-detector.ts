@@ -1,3 +1,4 @@
+import { DEFAULTS } from "@rivonclaw/core";
 import { createLogger } from "@rivonclaw/logger";
 import { request } from "node:http";
 
@@ -21,7 +22,7 @@ const PROBE_TARGETS: ProbeTarget[] = [
   { type: "ollama", host: "127.0.0.1", port: 11434, versionPath: "/api/version" },
 ];
 
-const PROBE_TIMEOUT_MS = 2000;
+const PROBE_TIMEOUT_MS = DEFAULTS.desktop.probeTimeoutMs;
 
 /** HTTP GET using node:http — see local-model-fetcher.ts for rationale. */
 function httpGet(url: string, timeoutMs: number): Promise<{ status: number; body: string }> {

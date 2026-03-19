@@ -5,8 +5,6 @@ import { buildExtraProviderConfigs, writeGatewayConfig } from "@rivonclaw/gatewa
 import type { Storage } from "@rivonclaw/storage";
 import type { SecretStore } from "@rivonclaw/secrets";
 import { buildOwnerAllowFrom } from "../auth/owner-sync.js";
-import type { AuthSessionManager } from "../auth/auth-session.js";
-
 export interface GatewayConfigDeps {
   storage: Storage;
   secretStore: SecretStore;
@@ -16,7 +14,6 @@ export interface GatewayConfigDeps {
   extensionsDir: string;
   sttCliPath: string;
   filePermissionsPluginPath?: string;
-  authSession?: AuthSessionManager;
 }
 
 /**
@@ -24,7 +21,7 @@ export interface GatewayConfigDeps {
  * Returns closures that can be called without passing deps each time.
  */
 export function createGatewayConfigBuilder(deps: GatewayConfigDeps) {
-  const { storage, secretStore, locale, configPath, stateDir, extensionsDir, sttCliPath, filePermissionsPluginPath, authSession } = deps;
+  const { storage, secretStore, locale, configPath, stateDir, extensionsDir, sttCliPath, filePermissionsPluginPath } = deps;
 
   function isGeminiOAuthActive(): boolean {
     return storage.providerKeys.getAll()
@@ -93,7 +90,7 @@ export function createGatewayConfigBuilder(deps: GatewayConfigDeps) {
     mistral: "RIVONCLAW_EMB_MISTRAL_APIKEY",
   };
 
-  async function buildFullGatewayConfig(): Promise<Parameters<typeof writeGatewayConfig>[0]> {
+  async function buildFullGatewayConfig(overrides?: { toolAllowlist?: string[] }): Promise<Parameters<typeof writeGatewayConfig>[0]> {
     const activeKey = storage.providerKeys.getActive();
     const curProvider = activeKey?.provider as LLMProvider | undefined;
     const curRegion = storage.settings.get("region") ?? (locale === "zh" ? "cn" : "us");
@@ -124,10 +121,6 @@ export function createGatewayConfigBuilder(deps: GatewayConfigDeps) {
       ? !!(await secretStore.get(`embedding-${curEmbeddingProvider}-apikey`))
       : false;
 
-    // Simplified: just pass static defaults. Per-run prompt addendum and
-    // tool gating are handled by the plugin's own hooks at runtime.
-    const browserProfilesEnabled = !!authSession?.getAccessToken();
-
     return {
       configPath,
       gatewayPort: resolveGatewayPort(),
@@ -140,26 +133,15 @@ export function createGatewayConfigBuilder(deps: GatewayConfigDeps) {
         allow: [
           "rivonclaw-tools",
           "rivonclaw-file-permissions",
-          "search-browser-fallback",
+          "rivonclaw-capability-manager",
+          "rivonclaw-search-browser-fallback",
           "google-gemini-cli-auth",
-          "mobile-chat-channel",
+          "rivonclaw-mobile-chat-channel",
           "rivonclaw-event-bridge",
           "memory-core",
-          "browser-profiles-tools",
+          "rivonclaw-browser-profiles-tools",
         ],
         entries: {
-          "browser-profiles-tools": {
-            config: {
-              enabled: true,
-              capabilityContext: {
-                browserProfiles: {
-                  enabled: browserProfilesEnabled,
-                  disclosureLevel: "standard",
-                  allowDynamicDiscovery: true,
-                },
-              },
-            },
-          },
           "rivonclaw-tools": {
             config: {
               browserMode: curBrowserMode,
@@ -193,6 +175,9 @@ export function createGatewayConfigBuilder(deps: GatewayConfigDeps) {
       browserCdpPort: curBrowserCdpPort,
       agentWorkspace: join(stateDir, "workspace"),
       extraSkillDirs: [join(stateDir, "skills")],
+      // ADR-031: allow all plugin tools by default (visibility controlled at runtime by capability-manager).
+      // "group:plugins" is an OpenClaw allowlist keyword that permits all optional plugin tools.
+      toolAllowlist: overrides?.toolAllowlist ?? ["group:plugins"],
     };
   }
 

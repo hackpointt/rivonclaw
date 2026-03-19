@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createLogger } from "@rivonclaw/logger";
 import {
   ALL_PROVIDERS, getProviderMeta, resolveGatewayProvider,
-  DEFAULT_GATEWAY_PORT, CDP_PORT_OFFSET,
+  DEFAULT_GATEWAY_PORT, CDP_PORT_OFFSET, DEFAULTS,
   type LLMProvider,
 } from "@rivonclaw/core";
 import {
@@ -130,10 +130,15 @@ const REMOVED_PLUGIN_IDS = new Set(["wecom", "dingtalk"]);
 /** Plugin IDs renamed during the EasyClaw → RivonClaw rebrand.
  *  Old names are replaced with new names in plugins.allow on every config write. */
 const RENAMED_PLUGIN_IDS: Record<string, string> = {
+  // v1.6 → v1.7: easyclaw → rivonclaw rebrand
   "easyclaw-tools": "rivonclaw-tools",
   "easyclaw-policy": "rivonclaw-policy",
   "easyclaw-event-bridge": "rivonclaw-event-bridge",
   "easyclaw-file-permissions": "rivonclaw-file-permissions",
+  // v1.7 → v1.8: unify all extensions under rivonclaw- prefix
+  "browser-profiles-tools": "rivonclaw-browser-profiles-tools",
+  "mobile-chat-channel": "rivonclaw-mobile-chat-channel",
+  "search-browser-fallback": "rivonclaw-search-browser-fallback",
 };
 
 /**
@@ -165,9 +170,9 @@ function resolveFilePermissionsPluginPath(): string {
   const monorepoRoot = findMonorepoRoot();
   if (!monorepoRoot) {
     // Fallback: assume we're in the monorepo root
-    return resolve(process.cwd(), "extensions", "file-permissions", "dist", "rivonclaw-file-permissions.mjs");
+    return resolve(process.cwd(), "extensions", "rivonclaw-file-permissions", "dist", "rivonclaw-file-permissions.mjs");
   }
-  return resolve(monorepoRoot, "extensions", "file-permissions", "dist", "rivonclaw-file-permissions.mjs");
+  return resolve(monorepoRoot, "extensions", "rivonclaw-file-permissions", "dist", "rivonclaw-file-permissions.mjs");
 }
 
 /**
@@ -270,6 +275,7 @@ export interface OpenClawGatewayConfig {
     };
   };
   tools?: {
+    allow?: string[];
     exec?: {
       host?: string;
       security?: string;
@@ -419,6 +425,13 @@ export interface WriteGatewayConfigOptions {
     baseUrl: string;
     models: Array<{ id: string; name: string; inputModalities?: string[] }>;
   }>;
+  /**
+   * Tool allowlist for optional plugin tools (ADR-031).
+   * Written to `tools.allow` in openclaw.json so that `collectExplicitAllowlist()`
+   * includes these entries and `resolvePluginTools()` makes optional tools visible.
+   * Entries can be tool names (e.g. "browser_profiles_list") or plugin IDs.
+   */
+  toolAllowlist?: string[];
 }
 
 
@@ -597,10 +610,27 @@ export function writeGatewayConfig(options: WriteGatewayConfigOptions): string {
       typeof existingTools.exec === "object" && existingTools.exec !== null
         ? (existingTools.exec as Record<string, unknown>)
         : {};
+    // Remove stale tools.allow from previous config versions (ADR-031).
+    // tools.allow is only written when toolAllowlist is explicitly provided.
+    const { allow: _staleAllow, ...cleanExistingTools } = existingTools as Record<string, unknown> & { allow?: unknown };
+    config.tools = {
+      ...cleanExistingTools,
+      profile: DEFAULTS.gatewayConfig.toolsProfile,
+      exec: { ...existingExec, host: DEFAULTS.gatewayConfig.execHost, security: DEFAULTS.gatewayConfig.execSecurity, ask: "off" },
+    };
+  }
+
+  // Tool allowlist for optional plugin tools (ADR-031).
+  // Written to `tools.allow` so that `collectExplicitAllowlist()` picks it up
+  // and `resolvePluginTools()` makes optional tools visible to the LLM.
+  if (options.toolAllowlist !== undefined) {
+    const existingTools =
+      typeof config.tools === "object" && config.tools !== null
+        ? (config.tools as Record<string, unknown>)
+        : {};
     config.tools = {
       ...existingTools,
-      profile: "full",
-      exec: { ...existingExec, host: "gateway", security: "full", ask: "off" },
+      allow: options.toolAllowlist,
     };
   }
 
@@ -703,6 +733,7 @@ export function writeGatewayConfig(options: WriteGatewayConfigOptions): string {
           const normalized = p.replace(/\\/g, "/");
           return (
             normalized.includes("search-browser-fallback") ||
+            normalized.includes("rivonclaw-search-browser-fallback") ||
             normalized.includes("extensions/wecom") ||
             normalized.includes("extensions/dingtalk") ||
             normalized.endsWith("/extensions") ||
@@ -728,7 +759,7 @@ export function writeGatewayConfig(options: WriteGatewayConfigOptions): string {
         typeof merged.entries === "object" && merged.entries !== null
           ? (merged.entries as Record<string, unknown>)
           : {};
-      delete existingEntries["search-browser-fallback"];
+      delete existingEntries["rivonclaw-search-browser-fallback"];
       for (const id of REMOVED_PLUGIN_IDS) delete existingEntries[id];
       // Rename stale easyclaw-* entries to rivonclaw-*
       for (const [oldId, newId] of Object.entries(RENAMED_PLUGIN_IDS)) {
@@ -949,7 +980,7 @@ export function writeGatewayConfig(options: WriteGatewayConfigOptions): string {
       // Profile MUST be named "openclaw" — the LLM tool description hardcodes
       // `profile="openclaw"` for the isolated browser, so naming it anything
       // else causes the auto-injected fallback profile to be used instead.
-      const cdpPort = options.browserCdpPort ?? 9222;
+      const cdpPort = options.browserCdpPort ?? DEFAULTS.gatewayConfig.defaultBrowserCdpPort;
       const { attachOnly: _, ...cleanBrowser } = existingBrowser as Record<string, unknown> & { attachOnly?: unknown };
       // Clean up stale "user-chrome" profile from old configs
       const { "user-chrome": __, ...cleanProfiles } = existingProfiles as Record<string, unknown>;
@@ -991,7 +1022,7 @@ export function writeGatewayConfig(options: WriteGatewayConfigOptions): string {
         : {};
     config.session = {
       ...existingSession,
-      reset: { mode: "idle", idleMinutes: 43200 },
+      reset: { mode: DEFAULTS.gatewayConfig.sessionResetMode, idleMinutes: DEFAULTS.gatewayConfig.sessionResetIdleMinutes },
     };
   }
 
@@ -1069,7 +1100,7 @@ export function ensureGatewayConfig(options?: {
         entries: {},
       },
       extraSkillDirs: [],
-      enableFilePermissions: options?.enableFilePermissions ?? true, // Enable by default
+      enableFilePermissions: options?.enableFilePermissions ?? DEFAULTS.permissions.filePermissionsFullAccess,
     });
   }
 

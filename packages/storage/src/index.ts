@@ -12,6 +12,7 @@ import { ChatSessionsRepository } from "./repo-chat-sessions.js";
 import { ChannelRecipientsRepository } from "./repo-channel-recipients.js";
 import { RepoMobilePairings } from "./repo-mobile-pairings.js";
 import { ToolSelectionsRepository } from "./repo-tool-selections.js";
+import { ChannelAccountsRepository } from "./repo-channel-accounts.js";
 export interface Storage {
   db: Database.Database;
   rules: RulesRepository;
@@ -26,6 +27,7 @@ export interface Storage {
   channelRecipients: ChannelRecipientsRepository;
   mobilePairings: RepoMobilePairings;
   toolSelections: ToolSelectionsRepository;
+  channelAccounts: ChannelAccountsRepository;
   close(): void;
 }
 
@@ -46,6 +48,7 @@ export function createStorage(dbPath?: string): Storage {
     channelRecipients: new ChannelRecipientsRepository(db),
     mobilePairings: new RepoMobilePairings(db),
     toolSelections: new ToolSelectionsRepository(db),
+    channelAccounts: new ChannelAccountsRepository(db),
     close() {
       closeDatabase(db);
     },
@@ -65,7 +68,9 @@ export { ChatSessionsRepository } from "./repo-chat-sessions.js";
 export { ChannelRecipientsRepository } from "./repo-channel-recipients.js";
 export { RepoMobilePairings } from "./repo-mobile-pairings.js";
 export { ToolSelectionsRepository } from "./repo-tool-selections.js";
+export { ChannelAccountsRepository } from "./repo-channel-accounts.js";
 export type { MobilePairing } from "./repo-mobile-pairings.js";
 export type { ChatSession } from "./repo-chat-sessions.js";
 export type { ChannelRecipient } from "./repo-channel-recipients.js";
+export type { ChannelAccount } from "./repo-channel-accounts.js";
 export type { Migration } from "./migrations.js";

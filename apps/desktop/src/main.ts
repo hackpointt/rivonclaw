@@ -25,7 +25,7 @@ import {
 } from "@rivonclaw/gateway";
 import type { OAuthFlowResult, AcquiredOAuthCredentials, AcquiredCodexOAuthCredentials } from "@rivonclaw/gateway";
 import type { GatewayState } from "@rivonclaw/gateway";
-import { parseProxyUrl, formatError, resolveGatewayPort, resolvePanelPort, resolveProxyRouterPort } from "@rivonclaw/core";
+import { parseProxyUrl, formatError, resolveGatewayPort, resolvePanelPort, resolveProxyRouterPort, DEFAULTS } from "@rivonclaw/core";
 import { resolveUpdateMarkerPath, resolveHeartbeatPath, resolveRivonClawHome } from "@rivonclaw/core/node";
 import { createStorage } from "@rivonclaw/storage";
 import { createSecretStore } from "@rivonclaw/secrets";
@@ -40,6 +40,7 @@ import { createConnection } from "node:net";
 import { existsSync, unlinkSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
+import { brandName } from "./i18n/brand.js";
 import { createTrayIcon } from "./tray/tray-icon.js";
 import { buildTrayMenu } from "./tray/tray-menu.js";
 import { startPanelServer, pushChatSSE } from "./panel-server.js";
@@ -52,7 +53,6 @@ import { createAutoUpdater } from "./utils/auto-updater.js";
 import { resetDevicePairing, cleanupGatewayLock, applyAutoLaunch } from "./gateway/startup-utils.js";
 import { initTelemetry } from "./utils/telemetry-init.js";
 import { createGatewayConfigBuilder } from "./gateway/gateway-config-builder.js";
-import { fetchPluginPrompts } from "./utils/plugin-prompt-fetcher.js";
 import { AuthSessionManager } from "./auth/auth-session.js";
 import { createSessionStateStack, type SessionStateStack } from "./browser-profiles/session-state-wiring.js";
 import { createCloudBackupProvider } from "./browser-profiles/session-state/backup-provider.js";
@@ -60,7 +60,7 @@ import type { ProfilePolicyResolver } from "./browser-profiles/runtime-service.j
 import type { BrowserProfileSessionStatePolicy } from "@rivonclaw/core";
 import { ManagedBrowserService } from "./browser-profiles/managed-browser-service.js";
 import { proxiedFetch } from "./api-routes/route-utils.js";
-import { buildToolContext } from "./utils/tool-context-builder.js";
+import { toolCapabilityResolver } from "./utils/tool-capability-resolver.js";
 
 const log = createLogger("desktop");
 
@@ -88,7 +88,7 @@ let lastSystemProxy: string | null = null;
 // we can determine whether this is the NEW app (install succeeded) or the OLD app
 // (user opened it while the installer is still running).
 const UPDATE_MARKER = resolveUpdateMarkerPath();
-const UPDATE_MARKER_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+const UPDATE_MARKER_MAX_AGE_MS = DEFAULTS.desktop.updateMarkerMaxAgeMs;
 let _updateBlocked = false;
 if (existsSync(UPDATE_MARKER)) {
   try {
@@ -138,8 +138,8 @@ if (existsSync(UPDATE_MARKER)) {
 // The heartbeat file is cleaned up on normal exit (both before-quit and
 // auto-updater cleanup paths).
 const HEARTBEAT_PATH = resolveHeartbeatPath();
-const HEARTBEAT_INTERVAL_MS = 10_000;
-const HEARTBEAT_STALE_MS = 30_000;
+const HEARTBEAT_INTERVAL_MS = DEFAULTS.desktop.heartbeatIntervalMs;
+const HEARTBEAT_STALE_MS = DEFAULTS.desktop.heartbeatStaleMs;
 
 function writeHeartbeat(): void {
   try {
@@ -272,12 +272,13 @@ app.whenReady().then(async () => {
   // Show an informational dialog and exit — NSIS will launch the new app when done.
   if (_updateBlocked) {
     const isZh = app.getLocale().startsWith("zh");
+    const updateLocale = isZh ? "zh" : "en";
     dialog.showMessageBoxSync({
       type: "info",
-      title: "RivonClaw",
+      title: brandName(updateLocale),
       message: isZh
-        ? "RivonClaw 正在更新中，请等待安装完成后再打开。"
-        : "RivonClaw is being updated. Please wait for the installation to finish.",
+        ? `${brandName(updateLocale)} 正在更新中，请等待安装完成后再打开。`
+        : `${brandName(updateLocale)} is being updated. Please wait for the installation to finish.`,
       buttons: ["OK"],
     });
     app.exit(0);
@@ -341,13 +342,13 @@ app.whenReady().then(async () => {
         type: "question",
         buttons: [locale === "zh" ? "使用现有数据" : "Use existing data", locale === "zh" ? "全新开始" : "Start fresh"],
         defaultId: 0,
-        title: "RivonClaw",
+        title: brandName(locale),
         message: locale === "zh"
           ? "检测到本地已安装的 OpenClaw"
           : "Existing OpenClaw installation detected",
         detail: locale === "zh"
-          ? `发现 ${standaloneDir} 中的 OpenClaw 数据（包括 Agent 记忆和文档）。\n是否让 RivonClaw 直接使用这些数据？`
-          : `Found OpenClaw data at ${standaloneDir} (including agent memory and documents).\nWould you like RivonClaw to use this existing data?`,
+          ? `发现 ${standaloneDir} 中的 OpenClaw 数据（包括 Agent 记忆和文档）。\n是否让 ${brandName(locale)} 直接使用这些数据？`
+          : `Found OpenClaw data at ${standaloneDir} (including agent memory and documents).\nWould you like ${brandName(locale)} to use this existing data?`,
       });
       if (response === 0) {
         storage.settings.set("openclaw_state_dir_override", standaloneDir);
@@ -415,7 +416,7 @@ app.whenReady().then(async () => {
   // In packaged app, plugins/extensions live in Resources/.
   // In dev, config-writer auto-resolves via monorepo root.
   const filePermissionsPluginPath = app.isPackaged
-    ? join(process.resourcesPath, "extensions", "file-permissions", "dist", "rivonclaw-file-permissions.mjs")
+    ? join(process.resourcesPath, "extensions", "rivonclaw-file-permissions", "dist", "rivonclaw-file-permissions.mjs")
     : undefined;
   const extensionsDir = app.isPackaged
     ? join(process.resourcesPath, "extensions")
@@ -448,22 +449,15 @@ app.whenReady().then(async () => {
         log.info(`Cleaned up abandoned OAuth flow ${id}`);
       }
     }
-  }, 5 * 60 * 1000);
+  }, DEFAULTS.desktop.oauthCleanupIntervalMs);
 
   // One-time backfill: ensure existing allowFrom entries have channel_recipients rows as owners
   const { backfillOwnerMigration } = await import("./auth/owner-migration.js");
   await backfillOwnerMigration(storage, stateDir, configPath);
 
-  // Fetch server-managed plugin prompts before first config build.
-  // Kept as a separate variable (not in configDeps) — prompts are pushed
-  // to the plugin via RPC, never written to the gateway config file.
-  let pluginPrompts: Record<string, string> = authSession?.getAccessToken()
-    ? await fetchPluginPrompts(authSession)
-    : {};
-
   // Build gateway config helpers (closures bound to current settings)
   const { buildFullGatewayConfig } = createGatewayConfigBuilder({
-    storage, secretStore, locale, configPath, stateDir, extensionsDir, sttCliPath, filePermissionsPluginPath, authSession,
+    storage, secretStore, locale, configPath, stateDir, extensionsDir, sttCliPath, filePermissionsPluginPath,
   });
 
   writeGatewayConfig(await buildFullGatewayConfig());
@@ -581,50 +575,41 @@ app.whenReady().then(async () => {
         rpcClient?.request("event_bridge_init", {})
           .catch((e: unknown) => log.debug("Event bridge init (may not be loaded):", e));
 
-        // Push tool contexts for all existing selections to gateway plugin
-        if (authSession?.getAccessToken()) {
-          const scopes = storage.toolSelections.listScopes();
-          for (const { scopeType, scopeKey } of scopes) {
-            buildToolContext(scopeType, scopeKey, storage, authSession)
-              .then(toolCtx => {
-                rpcClient?.request("browser_profiles_set_run_context", toolCtx)
-                  .catch((e: unknown) => log.debug(`Failed to push tool context for ${scopeType}:${scopeKey}:`, e));
-              })
-              .catch((e: unknown) => log.debug(`Failed to build tool context for ${scopeType}:${scopeKey}:`, e));
-          }
+        // Initialize ToolCapabilityResolver with gateway tool catalog + entitlements
+        (async () => {
+          try {
+            const catalog = await rpcClient!.request<{
+              groups: Array<{
+                tools: Array<{ id: string; source: "core" | "plugin"; pluginId?: string }>;
+              }>;
+            }>("tools.catalog", { includePlugins: true });
 
-          // Push default tool context for enabled cron jobs that don't have explicit selections.
-          // This ensures scheduled cron runs have context available even if the user never
-          // opened the cron page or configured selections — the server will apply default presets.
-          rpcClient?.request<{ jobs: Array<{ id: string }> }>("cron.list", { enabled: "enabled", limit: 100 })
-            .then(result => {
-              const existingScopeKeys = new Set(
-                storage.toolSelections.listScopes()
-                  .filter(s => s.scopeType === "cron_job")
-                  .map(s => s.scopeKey)
-              );
-              for (const job of result.jobs) {
-                // Skip jobs that already have explicit selections (already pushed above)
-                if (existingScopeKeys.has(job.id)) continue;
-                buildToolContext("cron_job", job.id, storage, authSession)
-                  .then(toolCtx => {
-                    rpcClient?.request("browser_profiles_set_run_context", toolCtx)
-                      .catch((e: unknown) => log.warn(`Failed to push cron tool context for ${job.id}:`, e));
-                  })
-                  .catch((e: unknown) => log.warn(`Failed to build cron tool context for ${job.id}:`, e));
+            const catalogTools: Array<{ id: string; source: "core" | "plugin"; pluginId?: string }> = [];
+            for (const group of catalog.groups ?? []) {
+              for (const tool of group.tools ?? []) {
+                catalogTools.push({ id: tool.id, source: tool.source, pluginId: tool.pluginId });
               }
-            })
-            .catch((e: unknown) => log.warn("Failed to list cron jobs for tool context push:", e));
-        }
+            }
 
-        // Push plugin prompts via RPC (in-memory, not written to config file).
-        // Each plugin registers "{pluginId}_set_prompt_addendum" gateway method;
-        // we iterate the map so new plugins need zero changes in main.ts.
-        for (const [pluginId, prompt] of Object.entries(pluginPrompts)) {
-          const method = `${pluginId.replace(/-/g, "_")}_set_prompt_addendum`;
-          rpcClient?.request(method, { prompt })
-            .catch((e: unknown) => log.debug(`Failed to push prompt for ${pluginId}:`, e));
-        }
+            // Get entitled tools from cached available tools or fetch fresh
+            let entitledToolIds: string[] = [];
+            if (authSession?.getAccessToken()) {
+              const availableTools = authSession.getCachedAvailableTools()
+                ?? await authSession.fetchAvailableTools().catch(() => []);
+              entitledToolIds = availableTools
+                .filter(t => t.allowed)
+                .map(t => t.id);
+            }
+
+            toolCapabilityResolver.init(entitledToolIds, catalogTools);
+          } catch (e) {
+            log.warn("Failed to initialize ToolCapabilityResolver:", e);
+          }
+        })();
+
+        // NOTE: Batch push of tool contexts on gateway connect has been removed.
+        // Tool contexts are now pushed on-demand: when selections change (PUT/DELETE),
+        // when the panel ensures context (POST ensure-context), or at cron event time.
 
         // Push locally-stored cookies for managed profiles to the gateway plugin
         pushStoredCookiesToGateway()
@@ -649,26 +634,6 @@ app.whenReady().then(async () => {
             seq?: number;
           };
           pushChatSSE("chat-mirror", p);
-        }
-        // When a cron job is added/updated, push tool context for enabled jobs
-        // so scheduled runs have browser profile context available.
-        // This covers all mutation paths (panel UI, AI agent tool calls, CLI).
-        if (evt.event === "cron") {
-          const cronEvt = evt.payload as { jobId?: string; action?: string } | undefined;
-          if (cronEvt?.jobId && (cronEvt.action === "added" || cronEvt.action === "updated")) {
-            // Query the job to check if it's enabled before pushing context
-            rpcClient?.request<{ id: string; enabled: boolean }>("cron.get", { id: cronEvt.jobId })
-              .then(job => {
-                if (!job?.enabled) return;
-                buildToolContext("cron_job", job.id, storage, authSession)
-                  .then(toolCtx => {
-                    rpcClient?.request("browser_profiles_set_run_context", toolCtx)
-                      .catch((e: unknown) => log.warn(`Failed to push cron tool context for ${job.id}:`, e));
-                  })
-                  .catch((e: unknown) => log.warn(`Failed to build cron tool context for ${job.id}:`, e));
-              })
-              .catch((e: unknown) => log.debug(`Failed to query cron job ${cronEvt.jobId}:`, e));
-          }
         }
         if (evt.event === "mobile.inbound") {
           const p = evt.payload as { sessionKey?: string; message?: string; timestamp?: number; channel?: string; mediaPaths?: string[] } | undefined;
@@ -1039,7 +1004,7 @@ app.whenReady().then(async () => {
     );
   }
 
-  tray.setToolTip("RivonClaw");
+  tray.setToolTip(brandName(systemLocale));
 
   // Windows/Linux: clicking the tray icon should show/hide the window.
   // macOS uses the context menu on click, so skip this handler there.
@@ -1078,7 +1043,7 @@ app.whenReady().then(async () => {
     updater.check().catch((err: unknown) => {
       log.warn("Periodic update check failed:", err);
     });
-  }, 4 * 60 * 60 * 1000);
+  }, DEFAULTS.desktop.updateCheckIntervalMs);
 
   // Create main panel window (hidden initially, loaded when gateway starts)
   const isDev = !!process.env.PANEL_DEV_URL;
@@ -1086,7 +1051,7 @@ app.whenReady().then(async () => {
     width: isDev ? 2000 : 1400,
     height: 800,
     show: false,
-    title: "RivonClaw",
+    title: brandName(systemLocale),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -1408,6 +1373,7 @@ app.whenReady().then(async () => {
         log.error("Failed to handle permissions change:", err);
       });
     },
+    onToolSelectionChange: undefined, // Tool visibility is controlled by capability-manager at runtime, no gateway restart needed
     sessionLifecycleManager: sessionStateStack.lifecycleManager,
     managedBrowserService,
     onBrowserChange: () => {
@@ -1426,20 +1392,29 @@ app.whenReady().then(async () => {
         });
     },
     onAuthChange: () => {
-      // Re-fetch server-managed plugin prompts and push via RPC (in-memory).
+      // Re-init ToolCapabilityResolver with fresh entitlements after login/logout.
       (async () => {
-        if (authSession?.getAccessToken()) {
-          pluginPrompts = await fetchPluginPrompts(authSession);
-        } else {
-          pluginPrompts = {};
+        if (!rpcClient?.isConnected()) return;
+        try {
+          let entitledToolIds: string[] = [];
+          if (authSession?.getAccessToken()) {
+            const availableTools = await authSession.fetchAvailableTools().catch(() => []);
+            entitledToolIds = availableTools
+              .filter((t: { allowed: boolean }) => t.allowed)
+              .map((t: { id: string }) => t.id);
+          }
+          const catalogRes = await rpcClient.request<{ tools: Array<{ name: string; source: string; pluginId?: string }> }>("tools.catalog", {});
+          const catalogTools = (catalogRes?.tools ?? []).map((t: { name: string; source: string; pluginId?: string }) => ({
+            id: t.name,
+            source: t.source as "core" | "plugin",
+            pluginId: t.pluginId,
+          }));
+          toolCapabilityResolver.init(entitledToolIds, catalogTools);
+          log.info(`ToolCapabilityResolver re-initialized: ${entitledToolIds.length} entitled tools`);
+        } catch (e) {
+          log.warn("Failed to re-init ToolCapabilityResolver on auth change:", e);
         }
-        // Push updated prompts to all plugins via RPC (in-memory)
-        for (const [pluginId, prompt] of Object.entries(pluginPrompts)) {
-          const method = `${pluginId.replace(/-/g, "_")}_set_prompt_addendum`;
-          rpcClient?.request(method, { prompt })
-            .catch((e: unknown) => log.debug(`Failed to push prompt for ${pluginId} on auth change:`, e));
-        }
-      })().catch((e: unknown) => log.warn("onAuthChange prompt refresh failed:", e));
+      })().catch(() => {});
     },
     onAutoLaunchChange: (enabled: boolean) => {
       applyAutoLaunch(enabled);
@@ -1853,7 +1828,7 @@ app.whenReady().then(async () => {
     };
 
     // Global shutdown timeout — force exit if cleanup takes too long
-    const SHUTDOWN_TIMEOUT_MS = 10_000;
+    const SHUTDOWN_TIMEOUT_MS = DEFAULTS.desktop.shutdownTimeoutMs;
     Promise.race([
       cleanup(),
       new Promise<never>((_, reject) =>

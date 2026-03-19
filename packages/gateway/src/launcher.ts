@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULTS } from "@rivonclaw/core";
 import { createLogger } from "@rivonclaw/logger";
 import type {
   GatewayLaunchOptions,
@@ -20,11 +21,11 @@ import type {
 
 const log = createLogger("gateway");
 
-const DEFAULT_INITIAL_BACKOFF_MS = 1000;
-const DEFAULT_MAX_BACKOFF_MS = 30_000;
-const DEFAULT_HEALTHY_THRESHOLD_MS = 60_000;
+const DEFAULT_INITIAL_BACKOFF_MS = DEFAULTS.gateway.initialBackoffMs;
+const DEFAULT_MAX_BACKOFF_MS = DEFAULTS.gateway.maxBackoffMs;
+const DEFAULT_HEALTHY_THRESHOLD_MS = DEFAULTS.gateway.healthyThresholdMs;
 /** Skip reload if the gateway was spawned less than this many ms ago. */
-const STARTUP_GRACE_MS = 15_000;
+const STARTUP_GRACE_MS = DEFAULTS.gateway.startupGraceMs;
 
 /**
  * Calculate exponential backoff delay.

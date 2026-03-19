@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "../api/index.js";
-import { ensureToolContext, fetchToolSelections, saveToolSelections } from "../api/tool-registry.js";
+import { fetchToolSelections, saveToolSelections } from "../api/tool-registry.js";
 import { Select } from "../components/inputs/Select.js";
 import { ConfirmDialog } from "../components/modals/ConfirmDialog.js";
 import { useCronManager } from "./crons/useCronManager.js";
@@ -72,7 +72,7 @@ export function CronsPage() {
     try {
       setActionError(null);
       setRunningJobId(id);
-      await ensureToolContext("cron_job", id);
+      // Tool context is now pushed automatically by Desktop when gateway fires session_start
       await cron.runJob(id);
       trackEvent("cron.run_now");
     } catch (err) {

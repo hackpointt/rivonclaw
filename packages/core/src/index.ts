@@ -17,12 +17,7 @@ export type {
   KeyModelUsageSummary,
   KeyUsageDailyBucket,
   KeyUsageQueryParams,
-  SkillLabel,
-  MarketSkill,
   InstalledSkill,
-  SkillCategory,
-  MarketQuery,
-  MarketResponse,
   CSInboundMessage,
   CSOutboundMessage,
   CustomerServiceConfig,
@@ -63,7 +58,6 @@ export type {
   BrowserProfileResolveResult,
   BrowserProfilesDisclosureLevel,
   BrowserProfilesCapabilityBinding,
-  AgentRunCapabilityContext,
   BrowserProfilesFilterInput,
   CreateBrowserProfileInput,
   UpdateBrowserProfileInput,
@@ -92,7 +86,18 @@ export type {
   ToolSelection,
   ToolSelectionScope,
   ScopedToolConfig,
-  AgentRunToolContext,
+} from "./types/index.js";
+
+export type {
+  AgentRunCapabilityContext,
+  AuthorityMode,
+  ToolCallEnforcementResult,
+} from "./types/index.js";
+
+export type {
+  CatalogTool,
+  SurfaceAvailabilityResult,
+  ToolCapabilityResult,
 } from "./types/index.js";
 
 export type { ChannelType } from "./channels.js";
@@ -127,7 +132,7 @@ export {
 
 export { formatError, IMAGE_EXT_TO_MIME, IMAGE_MIME_TO_EXT } from "./error-utils.js";
 
-export { API_BASE_URL, API_BASE_URL_CN, TELEMETRY_URL, TELEMETRY_URL_CN, getApiBaseUrl, getGraphqlUrl, getTelemetryUrl } from "./endpoints.js";
+export { API_BASE_URL, API_BASE_URL_CN, TELEMETRY_URL, TELEMETRY_URL_CN, getApiBaseUrl, getGraphqlUrl, getTelemetryUrl, setApiBaseUrlOverride } from "./endpoints.js";
 
 export {
   DEFAULT_GATEWAY_PORT,
@@ -141,6 +146,8 @@ export {
 } from "./ports.js";
 
 export { RELAY_MAX_CLIENT_BYTES, RELAY_MAX_CLIENT_MB, RELAY_MAX_PAYLOAD_BYTES } from "./relay.js";
+
+export { DEFAULTS } from "./defaults.js";
 
 export * as GQL from "./generated/graphql.js";
 

@@ -4,6 +4,7 @@ import { DEFAULT_PANEL_DEV_PORT, DEFAULT_PANEL_PORT } from "@rivonclaw/core";
 
 export default defineConfig({
   plugins: [react()],
+  publicDir: "../desktop/build",
   server: {
     port: DEFAULT_PANEL_DEV_PORT,
     proxy: {

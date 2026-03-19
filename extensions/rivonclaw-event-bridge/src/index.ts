@@ -1,4 +1,18 @@
-const PREFIX = "[rivonclaw:event-bridge]";
+/**
+ * RivonClaw Event Bridge plugin.
+ *
+ * Mirrors agent events for ALL channels to the Chat Page by working around
+ * the vendor's `isControlUiVisible` gate in server-chat.ts. External channel
+ * runs (Telegram, Feishu, Mobile, etc.) normally have their sessionKey stripped
+ * from enriched events, so server-chat never broadcasts them. This plugin:
+ *
+ * 1. Builds a runId -> sessionKey map via the `llm_input` hook.
+ * 2. Listens to ALL agent events via `runtime.events.onAgentEvent()`.
+ * 3. When an event's sessionKey is undefined (suppressed), looks up the real
+ *    sessionKey and broadcasts via `gatewayBroadcast`.
+ */
+
+import { defineRivonClawPlugin } from "@rivonclaw/plugin-sdk";
 
 const CLEANUP_DELAY_MS = 30_000;
 
@@ -13,24 +27,11 @@ type AgentEventPayload = {
 
 type BroadcastFn = (event: string, payload: unknown) => void;
 
-/**
- * RivonClaw Event Bridge plugin.
- *
- * Mirrors agent events for ALL channels to the Chat Page by working around
- * the vendor's `isControlUiVisible` gate in server-chat.ts. External channel
- * runs (Telegram, Feishu, Mobile, etc.) normally have their sessionKey stripped
- * from enriched events, so server-chat never broadcasts them. This plugin:
- *
- * 1. Builds a runId -> sessionKey map via the `llm_input` hook.
- * 2. Listens to ALL agent events via `runtime.events.onAgentEvent()`.
- * 3. When an event's sessionKey is undefined (suppressed), looks up the real
- *    sessionKey and broadcasts via `gatewayBroadcast`.
- */
-const plugin = {
+export default defineRivonClawPlugin({
   id: "rivonclaw-event-bridge",
   name: "RivonClaw Event Bridge",
 
-  activate(api: any): void {
+  setup(api) {
     /** runId -> sessionKey mapping built from llm_input hook context. */
     const runSessionMap = new Map<string, string>();
 
@@ -40,16 +41,18 @@ const plugin = {
     // ── Capture broadcast via a lightweight gateway method ──────────
     // The desktop panel calls "event_bridge_init" once after gateway start
     // to hand the broadcast function to this plugin.
-    api.registerGatewayMethod(
-      "event_bridge_init",
-      ({ respond, context }: { respond: (ok: boolean) => void; context: { broadcast: BroadcastFn } }) => {
-        if (!gatewayBroadcast) {
-          gatewayBroadcast = context.broadcast;
-          console.log(PREFIX,"Gateway broadcast captured");
-        }
-        respond(true);
-      },
-    );
+    if (typeof api.registerGatewayMethod === "function") {
+      api.registerGatewayMethod(
+        "event_bridge_init",
+        ({ respond, context }: { respond: (ok: boolean) => void; context?: { broadcast: BroadcastFn } }) => {
+          if (!gatewayBroadcast && context) {
+            gatewayBroadcast = context.broadcast;
+            api.logger.info("Gateway broadcast captured");
+          }
+          respond(true);
+        },
+      );
+    }
 
     // ── Build runId -> sessionKey map from llm_input hook ───────────
     api.on(
@@ -78,7 +81,7 @@ const plugin = {
     );
 
     // ── Mirror suppressed agent events to Chat Page ─────────────────
-    const unsubscribe = api.runtime.events.onAgentEvent((evt: AgentEventPayload) => {
+    const unsubscribe = (api as any).runtime.events.onAgentEvent((evt: AgentEventPayload) => {
       // If sessionKey is present, server-chat.ts is already broadcasting — skip.
       if (evt.sessionKey) return;
 
@@ -108,9 +111,5 @@ const plugin = {
       runSessionMap.clear();
       gatewayBroadcast = null;
     });
-
-    console.log(PREFIX,"RivonClaw Event Bridge plugin activated");
   },
-};
-
-export default plugin;
+});

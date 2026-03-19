@@ -1,6 +1,18 @@
 import type { RouteHandler } from "./api-context.js";
 import { parseBody, sendJson } from "./route-utils.js";
 
+/** Decode the payload of a JWT without verification (already validated elsewhere). */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const base64 = token.split(".")[1];
+    if (!base64) return null;
+    const json = Buffer.from(base64, "base64url").toString("utf-8");
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export const handleAuthRoutes: RouteHandler = async (req, res, _url, pathname, ctx) => {
   if (!ctx.authSession) return false;
 
@@ -22,7 +34,14 @@ export const handleAuthRoutes: RouteHandler = async (req, res, _url, pathname, c
     }
     await ctx.authSession.storeTokens(body.accessToken, body.refreshToken);
     // Validate the session to cache user info
-    const user = await ctx.authSession.validate();
+    let user = await ctx.authSession.validate();
+    // Fallback: extract email from JWT payload when validate() fails (e.g. network error)
+    if (!user) {
+      const payload = decodeJwtPayload(body.accessToken);
+      if (payload && typeof payload.email === "string") {
+        user = { userId: (payload.sub as string) ?? "", email: payload.email, name: null, plan: (payload.plan as string) ?? "" };
+      }
+    }
     ctx.onAuthChange?.();
     sendJson(res, 200, { ok: true, user });
     return true;

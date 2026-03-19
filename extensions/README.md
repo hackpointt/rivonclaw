@@ -10,8 +10,8 @@ electron-builder.yml.
 |-----------|------|-------------|
 | `rivonclaw-tools` | Hook + Tool | Runtime context injection + `rivonclaw`/`providers` tools (ownerOnly) |
 | `rivonclaw-policy` | Hook | Injects compiled policies and guard directives into system prompt |
-| `file-permissions` | Hook | Validates file operations against permission policies |
-| `search-browser-fallback` | Hook (single-file) | Falls back to browser search when `web_search` fails |
+| `rivonclaw-file-permissions` | Hook | Validates file operations against permission policies |
+| `rivonclaw-search-browser-fallback` | Hook (single-file) | Falls back to browser search when `web_search` fails |
 
 ### rivonclaw-tools: Tool Status
 

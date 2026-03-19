@@ -1,0 +1,36 @@
+{
+  "name": "@rivonclaw/rivonclaw-browser-profiles-tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.mjs"
+    ]
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint": "oxlint",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@rivonclaw/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@rivonclaw/core": "workspace:*",
+    "@sinclair/typebox": "^0.34.0",
+    "@types/ws": "^8.18.1",
+    "oxlint": "^1.43.0",
+    "tsdown": "^0.20.3",
+    "vitest": "^4.0.18",
+    "ws": "^8.18.0"
+  }
+}

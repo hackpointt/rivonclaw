@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchRules, createRule, updateRule, deleteRule, trackEvent, type Rule } from "../api/index.js";
+import { DEFAULTS } from "@rivonclaw/core";
 
 const EXAMPLE_RULE_KEYS = [
   "onboarding.exampleRule1",
@@ -59,7 +60,7 @@ export function RulesPage() {
   const hasPending = rules.some((r) => r.artifactStatus === "pending");
   useEffect(() => {
     if (!hasPending) return;
-    const timer = setInterval(loadRules, 3000);
+    const timer = setInterval(loadRules, DEFAULTS.polling.rulesCompilationPollMs);
     return () => clearInterval(timer);
   }, [hasPending]);
 

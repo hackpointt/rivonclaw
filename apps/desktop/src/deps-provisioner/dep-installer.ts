@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { homedir, arch } from "node:os";
 import { join } from "node:path";
+import { DEFAULTS } from "@rivonclaw/core";
 import { createLogger } from "@rivonclaw/logger";
 import type { DepName } from "./types.js";
 import { getAugmentedPath } from "./dep-detector.js";
@@ -10,7 +11,7 @@ import type { Region } from "./region-detector.js";
 
 const log = createLogger("deps-provisioner");
 
-const INSTALL_TIMEOUT = 5 * 60_000; // 5 minutes
+const INSTALL_TIMEOUT = DEFAULTS.depsProvisioner.installTimeoutMs;
 
 // ---------------------------------------------------------------------------
 // Core spawn helper

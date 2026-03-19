@@ -51,7 +51,7 @@ export function ChatPage({ onAgentNameChange }: { onAgentNameChange?: (name: str
   // register an `after_tool_call` plugin hook that intercepts toolName==="message",
   // then broadcast a `chat` event with state==="delivery" to all WS clients.
   // The hook needs a captured `broadcast` ref from GatewayRequestContext — see
-  // mobile-chat-channel/openclaw-plugin.mjs L190 for the existing pattern.
+  // rivonclaw-mobile-chat-channel/openclaw-plugin.mjs L190 for the existing pattern.
   const streaming = view.displayStreaming;
   const [showAgentEvents, setShowAgentEvents] = useState(true);
   const [preserveToolEvents, setPreserveToolEvents] = useState(false);

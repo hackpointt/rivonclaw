@@ -16,10 +16,6 @@ export const KNOWN_CHANNELS = [
   { id: "msteams", labelKey: "channels.channelMsteams", tutorialUrl: "https://docs.openclaw.ai/channels/msteams", tooltip: "channels.tooltipMsteams" },
 ] as const;
 
-// Channels that require services blocked in mainland China (GFW)
-export const CHINA_BLOCKED_CHANNELS = new Set([
-  "telegram", "discord", "signal", "line", "googlechat", "slack",
-]);
 
 export function StatusBadge({ status, t }: { status: boolean | null | undefined; t: (key: string) => string }) {
   const variant = status === true ? "badge-success" : status === false ? "badge-danger" : "badge-warning";
@@ -32,11 +28,9 @@ export function StatusBadge({ status, t }: { status: boolean | null | undefined;
   );
 }
 
-/** Filter KNOWN_CHANNELS by locale (hide GFW-blocked channels for zh users). */
-export function getVisibleChannels(lang: string, selectedDropdownChannel: string) {
-  return lang === "zh"
-    ? KNOWN_CHANNELS.filter(ch => !CHINA_BLOCKED_CHANNELS.has(ch.id) || ch.id === selectedDropdownChannel)
-    : [...KNOWN_CHANNELS];
+/** Return all known channels (no locale-based filtering). */
+export function getVisibleChannels(_lang: string, _selectedDropdownChannel: string) {
+  return [...KNOWN_CHANNELS];
 }
 
 export interface AccountEntry {

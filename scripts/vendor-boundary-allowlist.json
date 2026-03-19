@@ -2,17 +2,17 @@
   "_comment": "Vendor boundary access control per ADR-030. 'sentinels' are permanent drift-detection tests that intentionally read vendor source. 'allowlist' is for temporary migration exceptions (should be empty when migration is complete).",
   "sentinels": [
     {
-      "file": "extensions/browser-profiles-tools/src/browser-lifecycle-hooks.test.ts",
+      "file": "extensions/rivonclaw-browser-profiles-tools/src/browser-lifecycle-hooks.test.ts",
       "vendorPath": "vendor/openclaw/src/plugins/types.ts",
       "reason": "Drift guard — reads vendor source to verify hook type definitions"
     },
     {
-      "file": "extensions/browser-profiles-tools/src/browser-lifecycle-hooks.test.ts",
+      "file": "extensions/rivonclaw-browser-profiles-tools/src/browser-lifecycle-hooks.test.ts",
       "vendorPath": "vendor/openclaw/src/plugins/hooks.ts",
       "reason": "Drift guard — reads vendor source to verify hook wiring"
     },
     {
-      "file": "extensions/browser-profiles-tools/src/browser-lifecycle-hooks.test.ts",
+      "file": "extensions/rivonclaw-browser-profiles-tools/src/browser-lifecycle-hooks.test.ts",
       "vendorPath": "vendor/openclaw/src/agents/tools/browser-tool.ts",
       "reason": "Drift guard — reads vendor source to verify browser tool integration"
     },

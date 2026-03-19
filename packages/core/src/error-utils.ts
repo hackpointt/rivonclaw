@@ -1,6 +1,13 @@
 /** Extract a human-readable message from an unknown caught value. */
 export function formatError(err: unknown): string {
-  if (err instanceof Error) return err.message;
+  if (err != null && typeof err === "object") {
+    // Apollo GraphQL errors: prefer the first server-side error message
+    const gqlErrors = (err as Record<string, unknown>).graphQLErrors;
+    if (Array.isArray(gqlErrors) && gqlErrors.length > 0 && gqlErrors[0].message) {
+      return gqlErrors[0].message;
+    }
+    if (err instanceof Error) return err.message;
+  }
   return String(err);
 }
 

@@ -14,8 +14,9 @@ import {
 import type { InstalledSkill } from "../api/index.js";
 import { ConfirmDialog } from "../components/modals/ConfirmDialog.js";
 import { SkillCard } from "../components/SkillCard.js";
+import { DEFAULTS } from "@rivonclaw/core";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = DEFAULTS.pagination.skills;
 
 export function SkillsPage() {
   const { t, i18n } = useTranslation();

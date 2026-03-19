@@ -1,6 +1,7 @@
 import { createLogger } from "@rivonclaw/logger";
 import { resolveOpenClawConfigPath, readExistingConfig, resolveOpenClawStateDir, writeChannelAccount, removeChannelAccount } from "@rivonclaw/gateway";
 import type { ChannelsStatusSnapshot } from "@rivonclaw/core";
+import { DEFAULTS } from "@rivonclaw/core";
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { sendChannelMessage } from "../channels/channel-senders.js";
@@ -136,8 +137,8 @@ export const handleChannelRoutes: RouteHandler = async (req, res, url, pathname,
       // Gateway probes channels serially; each channel probe can take up to 10s
       // (feishu uses a hard-coded default, ignoring the passed timeoutMs).
       // With N configured channels, worst case is N * 10s.
-      const probeTimeoutMs = 8000;
-      const clientTimeoutMs = probe ? 25000 : probeTimeoutMs + 2000;
+      const probeTimeoutMs = DEFAULTS.desktop.channelProbeTimeoutMs;
+      const clientTimeoutMs = probe ? DEFAULTS.polling.channelProbeClientTimeoutMs : DEFAULTS.desktop.channelClientTimeoutMs;
 
       const snapshot = await rpcClient.request<ChannelsStatusSnapshot>(
         "channels.status",
@@ -170,6 +171,30 @@ export const handleChannelRoutes: RouteHandler = async (req, res, url, pathname,
     } catch (err) {
       log.error("Failed to fetch channels status:", err);
       sendJson(res, 500, { error: String(err), snapshot: null });
+    }
+    return true;
+  }
+
+  // GET /api/channels/accounts/:channelId/:accountId — read config from SQLite
+  if (pathname.startsWith("/api/channels/accounts/") && req.method === "GET") {
+    const parts = pathname.slice("/api/channels/accounts/".length).split("/");
+    if (parts.length !== 2) {
+      sendJson(res, 400, { error: "Invalid path format. Expected: /api/channels/accounts/:channelId/:accountId" });
+      return true;
+    }
+
+    const [channelId, accountId] = parts.map(decodeURIComponent);
+
+    try {
+      const account = storage.channelAccounts.get(channelId, accountId);
+      if (!account) {
+        sendJson(res, 404, { error: "Channel account not found" });
+        return true;
+      }
+      sendJson(res, 200, { channelId: account.channelId, accountId: account.accountId, name: account.name, config: account.config });
+    } catch (err) {
+      log.error("Failed to get channel account:", err);
+      sendJson(res, 500, { error: String(err) });
     }
     return true;
   }
@@ -222,6 +247,9 @@ export const handleChannelRoutes: RouteHandler = async (req, res, url, pathname,
         accountId: body.accountId,
         config: accountConfig,
       });
+
+      // Persist non-secret config to SQLite (source of truth for EasyClaw read-back)
+      storage.channelAccounts.upsert(body.channelId, body.accountId, body.name ?? null, body.config);
 
       sendJson(res, 201, { ok: true, channelId: body.channelId, accountId: body.accountId });
       onProviderChange?.({ configOnly: true });
@@ -283,6 +311,9 @@ export const handleChannelRoutes: RouteHandler = async (req, res, url, pathname,
 
       writeChannelAccount({ configPath, channelId, accountId, config: accountConfig });
 
+      // Persist non-secret config to SQLite (source of truth for EasyClaw read-back)
+      storage.channelAccounts.upsert(channelId, accountId, body.name ?? null, body.config);
+
       sendJson(res, 200, { ok: true, channelId, accountId });
       onProviderChange?.({ configOnly: true });
       onChannelConfigured?.(channelId);
@@ -315,6 +346,9 @@ export const handleChannelRoutes: RouteHandler = async (req, res, url, pathname,
       }
 
       removeChannelAccount({ configPath, channelId, accountId });
+
+      // Remove from SQLite
+      storage.channelAccounts.delete(channelId, accountId);
 
       sendJson(res, 200, { ok: true, channelId, accountId });
       onProviderChange?.({ configOnly: true });

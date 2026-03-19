@@ -5,6 +5,7 @@ import {
   fetchAvailableTools,
   fetchToolSelections,
   saveToolSelections,
+  fetchSurfaceAvailability,
 } from "../../api/tool-registry.js";
 
 interface ToolSelectorProps {
@@ -14,15 +15,18 @@ interface ToolSelectorProps {
   dropdown?: boolean;
 }
 
-/** Only "-manage" (and future CRUD suffixes) count as write tools. */
-const WRITE_SUFFIXES = ["-manage", "-update", "-create", "-delete", "-archive"];
+/** Only manage/update/create/delete/archive suffixes count as write tools. */
+const WRITE_SUFFIXES = ["_manage", "_update", "_create", "_delete", "_archive", "_MANAGE", "_UPDATE", "_CREATE", "_DELETE", "_ARCHIVE"];
 
 function isWriteTool(toolId: string): boolean {
   return WRITE_SUFFIXES.some(s => toolId.endsWith(s));
 }
 
 function categoryToI18nKey(category: string): string {
-  return category.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+  // Handle both old format (browser-profiles) and new uppercase format (BROWSER_PROFILES)
+  return category
+    .toLowerCase()
+    .replace(/[_-]([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
 export function ToolSelector({ scopeType, scopeKey, dropdown }: ToolSelectorProps) {
@@ -35,11 +39,17 @@ export function ToolSelector({ scopeType, scopeKey, dropdown }: ToolSelectorProp
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [availableTools, currentSelections] = await Promise.all([
+    const [availableTools, currentSelections, surfaceAvailability] = await Promise.all([
       fetchAvailableTools(),
       fetchToolSelections(scopeType, scopeKey),
+      fetchSurfaceAvailability(),
     ]);
-    setTools(availableTools);
+    // Filter to only show tools that are surface-available
+    const surfaceSet = new Set(surfaceAvailability);
+    const filteredTools = surfaceSet.size > 0
+      ? availableTools.filter(t => surfaceSet.has(t.id) || surfaceSet.has(t.id.toUpperCase()))
+      : availableTools; // empty surfaceAvailability = no surface, show all
+    setTools(filteredTools);
     const map = new Map<string, boolean>();
     for (const s of currentSelections) {
       map.set(s.toolId, s.enabled);

@@ -5248,6 +5248,48 @@ tbody td {
   text-align: center;
 }
 
+/* Captcha */
+.captcha-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.captcha-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.captcha-svg {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.captcha-svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.captcha-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.captcha-refresh-btn {
+  flex-shrink: 0;
+}
+
 /* Auth modal form — removes page-level centering/padding */
 .auth-modal-form {
   padding: 0 4px 4px;

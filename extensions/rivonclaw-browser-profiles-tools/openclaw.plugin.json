@@ -1,0 +1,12 @@
+{
+  "id": "rivonclaw-browser-profiles-tools",
+  "name": "Browser Profiles Tools",
+  "description": "Exposes browser profile management tools and cookie lifecycle hooks to the agent",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "enabled": { "type": "boolean" }
+    }
+  }
+}

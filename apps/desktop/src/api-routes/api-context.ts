@@ -25,6 +25,7 @@ export interface ApiContext {
   onExtrasChange?: () => void;
   onPermissionsChange?: () => void;
   onAuthChange?: () => void;
+  onToolSelectionChange?: (effectiveToolIds: string[]) => void;
   onBrowserChange?: () => void;
   onAutoLaunchChange?: (enabled: boolean) => void;
   onChannelConfigured?: (channelId: string) => void;

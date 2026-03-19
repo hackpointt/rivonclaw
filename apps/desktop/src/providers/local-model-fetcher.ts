@@ -1,11 +1,11 @@
-import { formatError } from "@rivonclaw/core";
+import { formatError, DEFAULTS } from "@rivonclaw/core";
 import { createLogger } from "@rivonclaw/logger";
 import { request } from "node:http";
 import { request as requestHttps } from "node:https";
 
 const log = createLogger("local-model-fetcher");
 
-const FETCH_TIMEOUT_MS = 5000;
+const FETCH_TIMEOUT_MS = DEFAULTS.desktop.fetchTimeoutMs;
 
 /**
  * Derive the Ollama native API base from a baseUrl.

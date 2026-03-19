@@ -1,5 +1,14 @@
 import { gql } from "@apollo/client/core";
 
+export const REQUEST_CAPTCHA = gql`
+  mutation RequestCaptcha {
+    requestCaptcha {
+      token
+      svg
+    }
+  }
+`;
+
 export const LOGIN_MUTATION = gql`
   mutation Login($input: LoginInput!) {
     login(input: $input) {

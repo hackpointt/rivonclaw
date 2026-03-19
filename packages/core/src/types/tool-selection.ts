@@ -1,5 +1,5 @@
 /** Scope types for tool selection — determines what context a tool selection is bound to */
-export type ToolScopeType = "chat_session" | "cron_job" | "app_run";
+export type ToolScopeType = "chat_session" | "cron_job" | "app_run" | "service_run";
 
 /** A single tool's selection state */
 export interface ToolSelection {
@@ -19,10 +19,3 @@ export interface ScopedToolConfig extends ToolSelectionScope {
   updatedAt: number;
 }
 
-/** Run-scoped tool context passed to plugins for per-run enforcement */
-export interface AgentRunToolContext {
-  scopeType: ToolScopeType;
-  scopeKey: string;
-  entitledTools: string[];   // tool IDs the user CAN use (based on entitlements)
-  selectedTools: string[];   // tool IDs the user CHOSE to use for this run
-}

@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { DEFAULTS } from "@rivonclaw/core";
 import type { Storage, MobilePairing } from "@rivonclaw/storage";
 import { createLogger } from "@rivonclaw/logger";
 
 const log = createLogger("mobile-manager");
 
 /** How long a pairing code stays valid (ms). Shared with panel via API response. */
-export const PAIRING_CODE_TTL_MS = 60_000;
+export const PAIRING_CODE_TTL_MS = DEFAULTS.desktop.pairingCodeTtlMs;
 
 export class MobileManager {
     private activeCode: { code: string; expiresAt: number } | null = null;

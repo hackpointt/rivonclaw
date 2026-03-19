@@ -1,3 +1,4 @@
+import { DEFAULTS } from "@rivonclaw/core";
 import { Logger } from "tslog";
 import {
   mkdirSync,
@@ -14,7 +15,7 @@ export const LOG_DIR = resolveLogDir();
 
 const LOG_FILENAME = "rivonclaw.log";
 const LOG_FILENAME_PREV = "rivonclaw.log.1";
-const DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB per file
+const DEFAULT_MAX_FILE_SIZE = DEFAULTS.logger.maxFileSizeBytes;
 
 // --- Module state ---
 let fileLoggingEnabled = false;

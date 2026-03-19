@@ -11,12 +11,18 @@
       "types": "./dist/index.d.mts"
     }
   },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.mjs"
+    ]
+  },
   "scripts": {
     "build": "tsdown",
     "lint": "oxlint",
     "test": "vitest run"
   },
   "dependencies": {
+    "@rivonclaw/plugin-sdk": "workspace:*",
     "@rivonclaw/policy": "workspace:*",
     "@rivonclaw/logger": "workspace:*"
   },

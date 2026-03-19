@@ -29,6 +29,17 @@ function makeGuardContent(
   return JSON.stringify({ type: "guard", condition, action, reason });
 }
 
+/** Build a mock API that satisfies both PluginApi (from SDK) and OpenClawPluginAPI. */
+function makeMockApi(overrides?: Partial<OpenClawPluginAPI>) {
+  return {
+    id: "test",
+    logger: { info: vi.fn(), warn: vi.fn() },
+    on: vi.fn(),
+    registerHook: vi.fn(),
+    ...overrides,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Plugin Registration Tests
 // ---------------------------------------------------------------------------
@@ -40,7 +51,16 @@ describe("createRivonClawPlugin", () => {
       guardProvider: makeGuardProvider([]),
     });
 
-    expect(plugin.name).toBe("rivonclaw");
+    expect(plugin.name).toBe("RivonClaw Policy");
+  });
+
+  it("plugin has correct id", () => {
+    const plugin = createRivonClawPlugin({
+      policyProvider: makePolicyProvider(""),
+      guardProvider: makeGuardProvider([]),
+    });
+
+    expect(plugin.id).toBe("rivonclaw-policy");
   });
 
   it("plugin registers only before_agent_start hook", () => {
@@ -50,13 +70,13 @@ describe("createRivonClawPlugin", () => {
     });
 
     const registeredHooks: string[] = [];
-    const mockAPI: OpenClawPluginAPI = {
+    const mockAPI = makeMockApi({
       registerHook: vi.fn((hookName: string) => {
         registeredHooks.push(hookName);
       }) as unknown as OpenClawPluginAPI["registerHook"],
-    };
+    });
 
-    plugin.register(mockAPI);
+    plugin.activate(mockAPI);
 
     expect(registeredHooks).toContain("before_agent_start");
     expect(registeredHooks).not.toContain("before_tool_call");
@@ -84,7 +104,7 @@ describe("createRivonClawPlugin", () => {
       | ((ctx: AgentStartContext) => { prependContext: string })
       | undefined;
 
-    const mockAPI: OpenClawPluginAPI = {
+    const mockAPI = makeMockApi({
       registerHook: vi.fn(
         (hookName: string, handler: (...args: unknown[]) => unknown) => {
           if (hookName === "before_agent_start") {
@@ -92,9 +112,9 @@ describe("createRivonClawPlugin", () => {
           }
         },
       ) as unknown as OpenClawPluginAPI["registerHook"],
-    };
+    });
 
-    plugin.register(mockAPI);
+    plugin.activate(mockAPI);
 
     // Verify policy injection works
     expect(agentStartHandler).toBeDefined();

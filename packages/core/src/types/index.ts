@@ -26,12 +26,7 @@ export type {
   KeyUsageQueryParams,
 } from "./key-usage.js";
 export type {
-  SkillLabel,
-  MarketSkill,
   InstalledSkill,
-  SkillCategory,
-  MarketQuery,
-  MarketResponse,
 } from "./skills.js";
 export type {
   CSInboundMessage,
@@ -63,7 +58,6 @@ export type {
   BrowserProfileResolveResult,
   BrowserProfilesDisclosureLevel,
   BrowserProfilesCapabilityBinding,
-  AgentRunCapabilityContext,
   BrowserProfilesFilterInput,
   CreateBrowserProfileInput,
   UpdateBrowserProfileInput,
@@ -79,6 +73,12 @@ export type {
   SessionStateRuntimeTarget,
 } from "./browser-profiles.js";
 export { DEFAULT_SESSION_STATE_POLICY } from "./browser-profiles.js";
+
+export type {
+  AgentRunCapabilityContext,
+  AuthorityMode,
+  ToolCallEnforcementResult,
+} from "./capability-context.js";
 
 export type {
   PairingRequest,
@@ -102,5 +102,10 @@ export type {
   ToolSelection,
   ToolSelectionScope,
   ScopedToolConfig,
-  AgentRunToolContext,
 } from "./tool-selection.js";
+
+export type {
+  CatalogTool,
+  SurfaceAvailabilityResult,
+  ToolCapabilityResult,
+} from "./tool-capability.js";

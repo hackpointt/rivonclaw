@@ -1,10 +1,15 @@
 import { test as base, type ElectronApplication, type Page } from "@playwright/test";
 import { _electron } from "playwright";
 import path from "node:path";
+import dotenv from "dotenv";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
 import { createConnection } from "node:net";
+
+// Load e2e/.env via dotenv in every worker process.
+// Playwright config's env changes don't propagate to Electron test workers.
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const electronPath = require("electron") as unknown as string;
@@ -97,6 +102,7 @@ function buildEnv(tempDir: string, ports: WorkerPorts): Record<string, string> {
   env.RIVONCLAW_GATEWAY_PORT = String(ports.gateway);
   env.RIVONCLAW_PANEL_PORT = String(ports.panel);
   env.RIVONCLAW_PROXY_ROUTER_PORT = String(ports.proxy);
+
 
   // Skip the file-based gateway lock (acquireGatewayLock).  The lock uses
   // os.tmpdir()/openclaw-<uid>/gateway.<hash>.lock — a shared directory.
