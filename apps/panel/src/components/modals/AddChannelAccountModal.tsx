@@ -4,6 +4,7 @@ import { Modal } from "./Modal.js";
 import { Select } from "../inputs/Select.js";
 import { createChannelAccount, updateChannelAccount, trackEvent } from "../../api/index.js";
 import { CHANNEL_SCHEMAS } from "../../lib/channel-schemas.js";
+import { TagInput } from "../inputs/TagInput.js";
 
 export interface AddChannelAccountModalProps {
   isOpen: boolean;
@@ -48,11 +49,15 @@ export function AddChannelAccountModal({
     const initialData: Record<string, any> = {};
     schema.fields.forEach(field => {
       if (existingAccount?.config[field.id] !== undefined) {
-        initialData[field.id] = existingAccount.config[field.id];
+        if (field.type === "tags" && Array.isArray(existingAccount.config[field.id])) {
+          initialData[field.id] = (existingAccount.config[field.id] as any[]).map(String);
+        } else {
+          initialData[field.id] = existingAccount.config[field.id];
+        }
       } else if (field.defaultValue !== undefined) {
         initialData[field.id] = field.defaultValue;
       } else {
-        initialData[field.id] = "";
+        initialData[field.id] = field.type === "tags" ? [] : "";
       }
     });
     setFormData(initialData);
@@ -122,6 +127,13 @@ export function AddChannelAccountModal({
           if (!matches) return;
         }
         const value = formData[field.id];
+        // Tags fields: include as array only if non-empty
+        if (field.type === "tags") {
+          if (Array.isArray(value) && value.length > 0) {
+            config[field.id] = value;
+          }
+          return;
+        }
         if (value !== undefined && value !== "") {
           if (field.isSecret) {
             secrets[field.id] = String(value);
@@ -248,6 +260,12 @@ export function AddChannelAccountModal({
                   value: opt.value,
                   label: opt.label.startsWith("channels.") ? t(opt.label) : opt.label,
                 }))}
+              />
+            ) : field.type === "tags" ? (
+              <TagInput
+                tags={Array.isArray(formData[field.id]) ? formData[field.id] as string[] : []}
+                onChange={(tags) => setFormData({...formData, [field.id]: tags})}
+                placeholder={field.placeholder ? t(field.placeholder) : ""}
               />
             ) : field.type === "textarea" ? (
               <textarea

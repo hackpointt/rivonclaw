@@ -131,6 +131,16 @@ export async function deleteChannelAccount(
   });
 }
 
+/**
+ * Fetch a channel account's full config from SQLite (excludes secrets).
+ */
+export async function getChannelAccountConfig(
+  channelId: string,
+  accountId: string,
+): Promise<{ channelId: string; accountId: string; name: string | null; config: Record<string, unknown> }> {
+  return fetchJson(`/channels/accounts/${encodeURIComponent(channelId)}/${encodeURIComponent(accountId)}`);
+}
+
 // --- Pairing ---
 
 export interface PairingRequest {
